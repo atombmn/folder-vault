@@ -1,0 +1,10 @@
+# Windows PowerShell 5.1 and cmd.exe expect Windows line endings.
+* text=auto
+*.ps1  text eol=crlf
+*.psm1 text eol=crlf
+*.psd1 text eol=crlf
+*.cmd  text eol=crlf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.zip  binary
+*.png  binary

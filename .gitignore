@@ -1,0 +1,19 @@
+# Build output (make it with build/Build-Package.ps1)
+dist/
+
+# .NET Framework reference assemblies (tests/tools/Get-FVReferenceAssemblies.ps1)
+tests/.refs/
+
+# Never commit keys, certificates or private word lists
+*.pfx
+*.cer
+*.p12
+private-words.txt
+
+# Test results and editor files
+testResults.xml
+coverage.xml
+.vscode/
+*.swp
+Thumbs.db
+desktop.ini
