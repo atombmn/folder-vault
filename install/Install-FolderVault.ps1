@@ -42,8 +42,9 @@
     people use the right-click menu and the Start menu instead. Lightest option.
 
 .PARAMETER InactivityLockMinutes
-    Lock the screen after this many idle minutes (folders lock with it).
-    Default 10. 0 leaves the current setting alone.
+    Optional. Lock the screen after this many idle minutes (protected folders
+    lock with it). Default 0: Windows' own screen lock settings are used, and
+    a screen lock time set by an earlier Folder Vault installer is removed.
 
 .PARAMETER AllowUnencryptedSystemDrive
     Install even though drive C: is not BitLocker-encrypted. Not recommended.
@@ -64,7 +65,7 @@ param(
     [switch]$NoTrayIcon,
     [switch]$AllowUnencryptedSystemDrive,
     [switch]$AllowWritablePackageFolder,
-    [ValidateRange(0, 60)][int]$InactivityLockMinutes = 10,
+    [ValidateRange(0, 60)][int]$InactivityLockMinutes = 0,
     [switch]$Interactive,
     [string]$InstallDir = 'C:\Program Files\FolderVault',
     [string]$DataDir = 'C:\ProgramData\FolderVault'
@@ -201,7 +202,8 @@ $taskPath = '\Folder Vault\'
 $existing = Get-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction SilentlyContinue
 $oldVersion = $null
 $oldManifest = Join-Path $DataDir 'install-manifest.json'
-if (Test-Path -LiteralPath $oldManifest) { try { $oldVersion = (ConvertFrom-Json ([System.IO.File]::ReadAllText($oldManifest))).version } catch { $oldVersion = '(unknown)' } }
+$oldRecord = Read-FVInstallManifest -DataDir $DataDir
+if ($null -ne $oldRecord) { try { $oldVersion = [string]$oldRecord.version } catch { $oldVersion = '(unknown)' } }
 if ($null -ne $existing) {
     Stop-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction SilentlyContinue
     $left = @(Stop-FVProcesses -CommandLineLike @('*FolderVault.Broker.ps1*', '*FolderVault.Tray.ps1*'))
@@ -312,14 +314,19 @@ foreach ($k in @('NoModify', 'NoRepair')) { New-ItemProperty -Path $uninstallKey
 New-ItemProperty -Path $uninstallKey -Name 'EstimatedSize' -PropertyType DWord -Value $sizeKb -Force | Out-Null
 Write-FVOk 'Listed in Settings > Apps, so it can be removed like any program.'
 
+# Screen lock time: optional from 0.4.5. Earlier installers always set 10 minutes.
 if ($InactivityLockMinutes -gt 0) {
     New-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name 'InactivityTimeoutSecs' -PropertyType DWord -Value ($InactivityLockMinutes * 60) -Force | Out-Null
     Write-FVOk "The screen locks after $InactivityLockMinutes idle minutes (protected folders lock with it)."
+} else {
+    $reset = Reset-FVScreenLock -Manifest $oldRecord
+    if ($null -ne $reset) { Write-FVOk $reset }
+    else { Write-FVOk 'Screen lock: Windows'' own settings (Folder Vault does not change them).' }
 }
 
 # --------------------------------------------------------------- 7. confirm
 Write-FVStep 7 $total 'Checking that everything works'
-$manifest = [ordered]@{ product = 'Folder Vault'; version = (Get-FVProductVersion); installedUtc = ([datetime]::UtcNow.ToString('o')); escrowThumbprint = $cert.Thumbprint; trayIcon = (-not $NoTrayIcon); files = [ordered]@{} }
+$manifest = [ordered]@{ product = 'Folder Vault'; version = (Get-FVProductVersion); installedUtc = ([datetime]::UtcNow.ToString('o')); escrowThumbprint = $cert.Thumbprint; trayIcon = (-not $NoTrayIcon); screenLockMinutesSet = $InactivityLockMinutes; files = [ordered]@{} }
 foreach ($f in @(Get-ChildItem -LiteralPath $InstallDir -File | Sort-Object Name)) { $manifest.files[$f.Name] = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash }
 [System.IO.File]::WriteAllText($oldManifest, (ConvertTo-Json $manifest -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
 Import-Module (Join-Path $InstallDir 'FolderVault.Client.psm1') -Force

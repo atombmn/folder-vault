@@ -82,13 +82,13 @@ change, and unzip Folder Vault into it:
    if the zip file is in your Downloads folder:
 
    ```
-   Expand-Archive "$env:USERPROFILE\Downloads\FolderVault-0.4.4-client.zip" C:\FVInstall
+   Expand-Archive "$env:USERPROFILE\Downloads\FolderVault-0.4.5-client.zip" C:\FVInstall
    ```
 
-4. Copy the client's **.cer** file into `C:\FVInstall\FolderVault-0.4.4-client`,
+4. Copy the client's **.cer** file into `C:\FVInstall\FolderVault-0.4.5-client`,
    next to Install.cmd (File Explorer will ask for administrator permission:
    click **Continue**).
-5. Double-click `C:\FVInstall\FolderVault-0.4.4-client\Check-ThisPC.cmd`, then
+5. Double-click `C:\FVInstall\FolderVault-0.4.5-client\Check-ThisPC.cmd`, then
    **Install.cmd** in the same folder. The installer should now show no
    warning about who could change the folder.
 6. When every computer is done, delete `C:\FVInstall` from the same
@@ -194,7 +194,7 @@ From an elevated Windows PowerShell 5.1 prompt:
 | `-EscrowCertificate <file>` | The .cer file. Optional if exactly one .cer sits next to Install.cmd. |
 | `-SharedRoot C:\Shared` | Folders under which shared protected folders may be made. |
 | `-NoTrayIcon` | No shield icon. Lightest option; folders still lock by themselves. |
-| `-InactivityLockMinutes 10` | Screen locks after this many idle minutes (0 = leave as it is). |
+| `-InactivityLockMinutes 10` | Optional. Screen locks after this many idle minutes. Left out (or 0), Folder Vault does not touch the screen lock, and removes a screen lock time an earlier Folder Vault installer set (versions before 0.4.5 always set 10 minutes). |
 | `-AllowUnencryptedSystemDrive` | Install although C: is not encrypted. Not recommended. |
 | `-FolderRule AnyFolder` | Staff may protect any of their own folders on the PC's fixed drives, including OneDrive and folders such as `D:\Accounts` (the default from 0.3.0). |
 | `-FolderRule UserFoldersOnly` | Staff may protect only folders inside their own user folder. Left out, an update keeps the current choice. |
@@ -211,7 +211,7 @@ Exit code 0 means success. Removal: `.\install\Uninstall-FolderVault.ps1 [-Leave
 |---|---|---|
 | MinPasswordLength | 12 | Shortest folder password allowed (8 to 128) |
 | MaxUnlockMinutes | 240 | A folder locks after this long, whatever happens |
-| LockOnScreenLock | true | Lock folders when the screen locks |
+| LockOnScreenLock | true | Lock folders when the screen locks. Set to false to keep folders open across a screen lock (they still lock at sign-out, restart and after MaxUnlockMinutes) |
 | ForceDismountOnAutoLock | true | Lock even if files are open (unsaved changes are lost) |
 | MaxFailedAttempts, LockoutMinutes | 10, 15 | After 10 wrong passwords, wait 15 minutes |
 | BackoffStartAfter | 3 | Wrong passwords before waits begin |
@@ -310,5 +310,6 @@ unlocked: that would copy the files unencrypted.
 | A folder named `...foldervault-original-...` appeared | A file changed while the folder was being protected, so Folder Vault kept the original. Copy any newer file into the protected folder, then delete that one |
 | Ctrl+Alt+L does nothing | Windows picks up new shortcut keys at sign-in. Sign out and back in |
 | "Some files in that folder are only in OneDrive online" | In File Explorer, right-click the folder > **Always keep on this device**, wait for the green ticks, try again |
+| Protecting fails with "The copy could not be verified" | From 0.4.5 the message names the items that did not match and what the copy tool reported, and the full list is saved to `%LOCALAPPDATA%\FolderVault\last-copy-check.txt` (names and sizes, no file contents). Send that file to whoever supports Folder Vault. Nothing was changed: the original folder is as it was. |
 | Protecting fails with "Access to the path ...\Mounts\... is denied" | Run `admin\Test-FVVaultAccess.ps1`: `-Setup` as administrator, `-Check` as the person in ordinary PowerShell, then `-Cleanup` as administrator. Send the file it saves on the desktop to your support contact |
 | "That folder cannot be protected" for a folder the person owns | Read the reason in the window, then the table in 5.6. A folder on another drive also needs `AllowFoldersOutsideProfile` on |

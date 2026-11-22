@@ -293,3 +293,9 @@ checked, so nothing was changed, and the vault was removed.
 be shown by a stand-in in a unit test. The Windows test programme (W10, W26)
 would have found this on a test computer; it is still required before real use.
 
+## 11. Changes in 0.4.5 (22 November 2026)
+
+| ID | Sev. | Finding | Resolution |
+|---|---|---|---|
+| A-36 | Low | A failed copy check (fourth attempt, 0.4.4) told the person and IT nothing about what differed, so the cause could not be found from the report. Failed closed. | The message names up to three missing or different items with both sides' records (size and the first 8 characters of the SHA-256) and the copy tool's result; both full lists go to `%LOCALAPPDATA%\FolderVault\last-copy-check.txt` in the person's own profile. The log holds file names and sizes, no contents; file names inside a protected folder can be sensitive, so the file sits where only that person and administrators can read it. |
+| D-1 | Decision | At the owner's request, the installer no longer sets the machine inactivity limit (`InactivityTimeoutSecs`). This removes one control: before, an unlocked folder at an unattended PC locked within 10 minutes. Now that depends on the PC's own screen lock settings, or on `-InactivityLockMinutes` at install. | Accepted risk, documented in FOR-MANAGERS.md (residual risk 2) and the setup guide. Folders still lock on screen lock, sign-out, restart and after `MaxUnlockMinutes` (4 hours). Removal on update and uninstall touches only a value a Folder Vault installer would have set. Recommendation: set a screen lock through Windows settings or policy on every PC. |

@@ -362,6 +362,53 @@ function Stop-FVProcesses {
     return $left
 }
 
+$script:FVInactivityKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+
+function Test-FVScreenLockSetByUs {
+    <#
+        Pure decision: was this machine inactivity limit (InactivityTimeoutSecs,
+        in seconds) set by a Folder Vault installer? From 0.4.5 the install
+        record says so (screenLockMinutesSet). Earlier installers did not record
+        it, but always set it, to a whole number of minutes from 1 to 60
+        (10 by default), so for those records any such value counts.
+    #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param([AllowNull()]$Value, [AllowNull()]$Manifest)
+    if ($null -eq $Value -or $null -eq $Manifest) { return $false }
+    $v = [long]$Value
+    if ($null -ne $Manifest.PSObject.Properties['screenLockMinutesSet']) {
+        $m = [long]$Manifest.screenLockMinutesSet
+        return ($m -gt 0 -and $v -eq ($m * 60))
+    }
+    return ($v -ge 60 -and $v -le 3600 -and ($v % 60) -eq 0)
+}
+
+function Reset-FVScreenLock {
+    <#
+        Puts the screen lock back to Windows' own setting (no machine inactivity
+        limit) if a Folder Vault installer set it. Returns a sentence saying
+        what was done, or $null when nothing was changed.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([AllowNull()]$Manifest)
+    $v = $null
+    try { $v = (Get-ItemProperty -Path $script:FVInactivityKey -Name 'InactivityTimeoutSecs' -ErrorAction Stop).InactivityTimeoutSecs } catch { return $null }
+    if (-not (Test-FVScreenLockSetByUs -Value $v -Manifest $Manifest)) { return $null }
+    if (-not $PSCmdlet.ShouldProcess('InactivityTimeoutSecs', 'Remove')) { return $null }
+    Remove-ItemProperty -Path $script:FVInactivityKey -Name 'InactivityTimeoutSecs' -ErrorAction Stop
+    return ("The screen lock time Folder Vault set ({0} minutes) was removed; Windows' own screen lock settings apply again." -f ([long]$v / 60))
+}
+
+function Read-FVInstallManifest {
+    <# The install record (install-manifest.json) in $DataDir, or $null. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$DataDir)
+    $p = Join-Path $DataDir 'install-manifest.json'
+    if (-not (Test-Path -LiteralPath $p)) { return $null }
+    try { return (ConvertFrom-Json ([System.IO.File]::ReadAllText($p))) } catch { return $null }
+}
+
 function New-FVAdminOnlyFolder {
     <#
         Makes a new, empty folder under C:\Windows\Temp that only SYSTEM and
@@ -396,5 +443,5 @@ Export-ModuleMember -Function @(
     'Test-FVElevated', 'Start-FVElevated', 'Write-FVTitle', 'Write-FVStep', 'Write-FVOk', 'Write-FVNote', 'Write-FVWarn', 'Write-FVProblem',
     'Wait-FVKey', 'Read-FVYes', 'Get-FVReadiness', 'Write-FVReadiness', 'Find-FVEscrowCertificate',
     'Read-FVChecksumFile', 'Test-FVPackageIntegrity', 'Get-FVPackageFingerprint', 'Get-FVUntrustedWriter', 'Get-FVLocalAdminSids',
-    'Get-FVPackageWriters', 'Stop-FVProcesses', 'New-FVAdminOnlyFolder', 'Remove-FVAdminOnlyFolder'
+    'Get-FVPackageWriters', 'Stop-FVProcesses', 'Test-FVScreenLockSetByUs', 'Reset-FVScreenLock', 'Read-FVInstallManifest', 'New-FVAdminOnlyFolder', 'Remove-FVAdminOnlyFolder'
 )

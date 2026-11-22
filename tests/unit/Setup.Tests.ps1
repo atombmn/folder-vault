@@ -147,3 +147,30 @@ Describe 'Stopping old Folder Vault processes (0.4.2)' {
         @($global:FVSP.stopped) | Should -Not -Contain 101
     }
 }
+
+Describe '0.4.5: the screen lock time is optional, and an earlier one is undone' {
+    It 'recognises the value an older installer set (no record in the install file)' {
+        $old = [pscustomobject]@{ version = '0.4.4' }
+        Test-FVScreenLockSetByUs -Value 600 -Manifest $old | Should -BeTrue
+        Test-FVScreenLockSetByUs -Value 3600 -Manifest $old | Should -BeTrue
+        Test-FVScreenLockSetByUs -Value 900 -Manifest $old | Should -BeTrue
+        Test-FVScreenLockSetByUs -Value 45 -Manifest $old | Should -BeFalse -Because 'not a whole number of minutes'
+        Test-FVScreenLockSetByUs -Value 7200 -Manifest $old | Should -BeFalse -Because 'longer than the installer allowed'
+    }
+    It 'uses the install record from 0.4.5 on' {
+        Test-FVScreenLockSetByUs -Value 600 -Manifest ([pscustomobject]@{ screenLockMinutesSet = 10 }) | Should -BeTrue
+        Test-FVScreenLockSetByUs -Value 900 -Manifest ([pscustomobject]@{ screenLockMinutesSet = 10 }) | Should -BeFalse -Because 'someone changed it since'
+        Test-FVScreenLockSetByUs -Value 600 -Manifest ([pscustomobject]@{ screenLockMinutesSet = 0 }) | Should -BeFalse -Because 'Folder Vault did not set it'
+    }
+    It 'leaves alone a PC where Folder Vault was never installed, or where no limit is set' {
+        Test-FVScreenLockSetByUs -Value 600 -Manifest $null | Should -BeFalse
+        Test-FVScreenLockSetByUs -Value $null -Manifest ([pscustomobject]@{ version = '0.4.4' }) | Should -BeFalse
+    }
+    It 'installs without changing the screen lock unless asked' {
+        $t = $null; $e = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot '..\..\install\Install-FolderVault.ps1'), [ref]$t, [ref]$e)
+        $p = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'InactivityLockMinutes' }
+        $p.DefaultValue.Extent.Text | Should -Be '0'
+    }
+}
+

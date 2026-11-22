@@ -499,3 +499,43 @@ Describe 'A-34: Copy-FVTree leaves a vault root''s attributes to the background 
     }
 }
 
+Describe '0.4.5: a failed copy check says what was wrong' {
+    It 'names missing and different items, with both records, and the copy tool''s answer' {
+        $src = New-Object 'System.Collections.Generic.Dictionary[string,string]'
+        $src['a.txt'] = 'F|5|' + ('A' * 64); $src['b.txt'] = 'F|7|' + ('B' * 64)
+        $dst = New-Object 'System.Collections.Generic.Dictionary[string,string]'
+        $dst['b.txt'] = 'F|0|' + ('C' * 64)
+        $cmp = Compare-FVManifest -Source $src -Destination $dst
+        $d = Format-FVVerifyDetail -Compare $cmp -Source $src -Destination $dst -CopyResult ([pscustomobject]@{ ExitCode = 1; Text = "  New File   7  b.txt `r`n" })
+        $d | Should -Match 'not in the copy: a\.txt'
+        $d | Should -Match 'different: b\.txt \(original F\|7\|BBBBBBBB, copy F\|0\|CCCCCCCC\)'
+        $d | Should -Match 'copy tool exit code 1: New File 7 b\.txt'
+    }
+    It 'shows a link in the original as different, with no copy record' {
+        $src = New-Object 'System.Collections.Generic.Dictionary[string,string]'; $src['link'] = 'R'
+        $dst = New-Object 'System.Collections.Generic.Dictionary[string,string]'
+        $cmp = Compare-FVManifest -Source $src -Destination $dst
+        Format-FVVerifyDetail -Compare $cmp -Source $src -Destination $dst | Should -Be 'different: link (original R, copy (none))'
+    }
+    It 'shortens long lists' {
+        $src = New-Object 'System.Collections.Generic.Dictionary[string,string]'
+        1..6 | ForEach-Object { $src["f$_"] = 'F|1|x' }
+        $dst = New-Object 'System.Collections.Generic.Dictionary[string,string]'
+        $d = Format-FVVerifyDetail -Compare (Compare-FVManifest -Source $src -Destination $dst) -Source $src -Destination $dst
+        $d | Should -Match 'and 3 more$'
+    }
+    It 'writes both records to a log the person can send to IT' {
+        $src = New-Object 'System.Collections.Generic.Dictionary[string,string]'; $src['a.txt'] = 'F|5|x'
+        $dst = New-Object 'System.Collections.Generic.Dictionary[string,string]'
+        $old = $env:LOCALAPPDATA
+        $env:LOCALAPPDATA = Join-Path ([System.IO.Path]::GetTempPath()) ('fvlog-' + [guid]::NewGuid().ToString('N'))
+        try {
+            $f = Write-FVCopyCheckLog -Source $src -Destination $dst -SourcePath 'C:\Temp\T' -DestinationPath 'C:\M' -Detail 'not in the copy: a.txt'
+            $f | Should -BeLike '*FolderVault*last-copy-check.txt'
+            $t = Get-Content -Raw -LiteralPath $f
+            $t | Should -Match 'a\.txt = F\|5\|x'
+            $t | Should -Match 'Summary: not in the copy: a\.txt'
+        } finally { Remove-Item -Recurse -Force $env:LOCALAPPDATA -ErrorAction SilentlyContinue; $env:LOCALAPPDATA = $old }
+    }
+}
+

@@ -3,6 +3,32 @@
 All notable changes. Versions before 0.4.0 were developed under an internal
 working name; they are listed here under the name Folder Vault.
 
+## 0.4.5 (22 November 2026)
+
+### Changes
+- **The screen lock time is now optional.** Earlier installers always set
+  Windows' machine inactivity limit (10 minutes by default). From 0.4.5 the
+  installer leaves the screen lock alone unless `-InactivityLockMinutes` is
+  given. Updating a PC, or removing Folder Vault, takes away the limit an
+  earlier installer set, so Windows' own screen lock settings apply again. A
+  limit is removed only when it is what a Folder Vault installer would have
+  set (a whole number of minutes from 1 to 60, or from 0.4.5 the exact value
+  recorded in `install-manifest.json`); a value set some other way is left as
+  it is. Folders still lock when the screen locks (`LockOnScreenLock`, which
+  can be turned off in config.json).
+
+### Fixes
+- **"The copy could not be verified" said nothing about why.** The message
+  now names the items that are missing or different, shows both sides'
+  records (size and the start of the file's fingerprint), and gives the copy
+  tool's exit code and output. Both full lists are saved to
+  `%LOCALAPPDATA%\FolderVault\last-copy-check.txt` (names and sizes only, no
+  file contents). The same applies when unprotecting.
+
+### Added
+- Tests for the new detail and log, and for when the screen lock is and is
+  not put back.
+
 ## 0.4.4 (22 November 2026)
 
 ### Fixes

@@ -1,6 +1,6 @@
 # Folder Vault: summary for managers
 
-Version 0.4.4, November 2026.
+Version 0.4.5, November 2026.
 
 ## The problem
 
@@ -40,7 +40,8 @@ writing, or act on them.
    the shared passwords.* We recommend doing this in any case.
 2. **An unlocked folder is open to whoever is at that computer.** If someone
    unlocks a folder and walks away without locking the screen, it stays open
-   until the screen locks (set to 10 minutes of inactivity) or they return.
+   until the screen locks or they return. Folder Vault uses the PC's own
+   screen lock settings; IT can set a time when installing if wanted.
 3. **Old copies may survive.** Copies made before a folder was protected (old
    email attachments, files on USB sticks, older Windows restore points) are
    not touched by Folder Vault. A folder protected from OneDrive also stays in
@@ -75,7 +76,7 @@ one browser tab. The icon's figures will be measured by test W80.
 
 ## Where the project stands
 
-Folder Vault 0.4.4 is a **prototype**. Its logic has been checked with 479 automated
+Folder Vault 0.4.5 is a **prototype**. Its logic has been checked with 488 automated
 tests and two line-by-line security reviews. The installer, background service
 and health check have run on a real Windows computer; the first try found and
 fixed four faults there. A second review before deployment (13 November 2026)

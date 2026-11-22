@@ -128,9 +128,10 @@ function Copy-FVTree {
         # junctions, so Folder Vault does not rely on it.
         [switch]$Managed
     )
+    $result = $null
     try {
-        if ($Managed) { Copy-FVTreeManaged -Source $Source -Destination $Destination -ExcludeTopLevel $ExcludeTopLevel }
-        else { Copy-FVTreeCore -Source $Source -Destination $Destination -ExcludeTopLevel $ExcludeTopLevel }
+        if ($Managed) { $null = Copy-FVTreeManaged -Source $Source -Destination $Destination -ExcludeTopLevel $ExcludeTopLevel }
+        else { $result = Copy-FVTreeCore -Source $Source -Destination $Destination -ExcludeTopLevel $ExcludeTopLevel }
     }
     finally {
         if (Test-Path -LiteralPath $Destination) {
@@ -142,6 +143,57 @@ function Copy-FVTree {
             if (-not (Test-FVIsReparse $d)) { Set-FVFolderAttributes -Path $Destination -Attributes $RootAttributes }
         }
     }
+    return $result
+}
+
+function Format-FVVerifyDetail {
+    <#
+        A short, plain account of why a copy check failed, for the message the
+        person (and IT) sees: which items are missing or different, with both
+        sides' records, and what the copy tool reported. Full details go to
+        %LOCALAPPDATA%\FolderVault\last-copy-check.txt.
+    #>
+    [CmdletBinding()]
+    param($Compare, $Source, $Destination, $CopyResult, [int]$Max = 3)
+    $show = { param($v) if ($null -eq $v) { return '(none)' }; $p = @(([string]$v).Split('|')); if ($p.Count -eq 3 -and $p[2].Length -gt 8) { return "$($p[0])|$($p[1])|$($p[2].Substring(0, 8))" }; return [string]$v }
+    $parts = New-Object System.Collections.Generic.List[string]
+    $miss = @($Compare.Missing)
+    if ($miss.Count -gt 0) { $parts.Add('not in the copy: ' + (($miss | Select-Object -First $Max) -join ', ') + $(if ($miss.Count -gt $Max) { " and $($miss.Count - $Max) more" } else { '' })) }
+    $diff = @($Compare.Mismatched)
+    foreach ($k in ($diff | Select-Object -First $Max)) {
+        $dv = $null
+        if ($null -ne $Destination -and $Destination.ContainsKey($k)) { $dv = $Destination[$k] }
+        $parts.Add(("different: {0} (original {1}, copy {2})" -f $k, (& $show $Source[$k]), (& $show $dv)))
+    }
+    if ($diff.Count -gt $Max) { $parts.Add("and $($diff.Count - $Max) more different") }
+    if ($null -ne $CopyResult) {
+        $t = ([string]$CopyResult.Text -replace '\s+', ' ').Trim()
+        if ($t.Length -gt 160) { $t = $t.Substring(0, 160) + '...' }
+        $parts.Add(("copy tool exit code {0}{1}" -f $CopyResult.ExitCode, $(if ($t) { ": $t" } else { '' })))
+    }
+    return ($parts -join '; ')
+}
+
+function Write-FVCopyCheckLog {
+    <# Writes both sides' records to %LOCALAPPDATA%\FolderVault\last-copy-check.txt (names and sizes only, no file contents). Returns the path, or $null. #>
+    [CmdletBinding()]
+    param($Source, $Destination, [string]$SourcePath, [string]$DestinationPath, [string]$Detail)
+    try {
+        $base = $env:LOCALAPPDATA
+        if ([string]::IsNullOrEmpty($base)) { $base = [System.IO.Path]::GetTempPath() }
+        $dir = Join-Path $base 'FolderVault'
+        [void][System.IO.Directory]::CreateDirectory($dir)
+        $f = Join-Path $dir 'last-copy-check.txt'
+        $lines = New-Object System.Collections.Generic.List[string]
+        $lines.Add("Folder Vault copy check, $([datetime]::Now.ToString('yyyy-MM-dd HH:mm:ss')), version $(Get-FVProductVersion)")
+        $lines.Add("Summary: $Detail"); $lines.Add('')
+        $lines.Add("Original ($SourcePath):")
+        foreach ($k in @($Source.Keys | Sort-Object)) { $lines.Add("  $k = $($Source[$k])") }
+        $lines.Add(''); $lines.Add("Copy ($DestinationPath):")
+        foreach ($k in @($Destination.Keys | Sort-Object)) { $lines.Add("  $k = $($Destination[$k])") }
+        [System.IO.File]::WriteAllLines($f, $lines)
+        return $f
+    } catch { return $null }
 }
 
 function Copy-FVTreeCore {
@@ -156,7 +208,7 @@ function Copy-FVTreeCore {
         $r = Invoke-FVNative -FilePath $robo -ArgumentList $roboArgs
         # robocopy: 0-7 mean success (files copied, extras found); 8 and above mean failure.
         if ($r.ExitCode -ge 8) { throw [System.IO.IOException]::new("Copy failed (robocopy $($r.ExitCode)): " + $r.Text) }
-        return
+        return $r
     }
     Copy-FVTreeManaged -Source $Source -Destination $Destination -ExcludeTopLevel $ExcludeTopLevel
 }
@@ -286,14 +338,18 @@ function Invoke-FVProtectFolder {
 
     try {
         Invoke-FVProgress $Progress 'Copying files into the vault...' 25
-        Copy-FVTree -Source $folder -Destination $mount -RootAttributes ([System.IO.FileAttributes]::Directory -bor [System.IO.FileAttributes]::NotContentIndexed) -Managed:($chk.CloudItems -gt 0)
+        $copyResult = Copy-FVTree -Source $folder -Destination $mount -RootAttributes ([System.IO.FileAttributes]::Directory -bor [System.IO.FileAttributes]::NotContentIndexed) -Managed:($chk.CloudItems -gt 0)
         Invoke-FVProgress $Progress 'Checking every file was copied correctly...' 60
         $srcMan = Get-FVTreeManifest -Path $folder -Mode $VerifyMode
         $dstMan = Get-FVTreeManifest -Path $mount -Mode $VerifyMode -ExcludeTopLevel (Get-FVVolumeSystemNames)
         $cmp = Compare-FVManifest -Source $srcMan -Destination $dstMan
         if (-not $cmp.Ok) {
+            $detail = Format-FVVerifyDetail -Compare $cmp -Source $srcMan -Destination $dstMan -CopyResult $copyResult
+            $log = Write-FVCopyCheckLog -Source $srcMan -Destination $dstMan -SourcePath $folder -DestinationPath $mount -Detail $detail
             [void](& $discard)
-            return (New-FVStep 'VerifyFailed' (Get-FVMessage 'VerifyFailed') @{ missing = @($cmp.Missing | Select-Object -First 5); mismatched = @($cmp.Mismatched | Select-Object -First 5) })
+            $msg = "$(Get-FVMessage 'VerifyFailed') ($detail)"
+            if ($log) { $msg += " Details: $log" }
+            return (New-FVStep 'VerifyFailed' $msg @{ missing = @($cmp.Missing | Select-Object -First 5); mismatched = @($cmp.Mismatched | Select-Object -First 5) })
         }
     } catch {
         [void](& $discard)
@@ -386,12 +442,16 @@ function Invoke-FVUnprotectFolder {
         if (Test-Path -LiteralPath $restore) { return (New-FVStep 'InternalError' "A folder named '$restore' already exists. Remove it and try again.") }
         Invoke-FVProgress $Progress 'Copying files out of the vault...' 20
         [void][System.IO.Directory]::CreateDirectory($restore)
-        Copy-FVTree -Source $mount -Destination $restore -ExcludeTopLevel (Get-FVVolumeSystemNames) -RootAttributes ([System.IO.FileAttributes]::Directory)
+        $copyResult = Copy-FVTree -Source $mount -Destination $restore -ExcludeTopLevel (Get-FVVolumeSystemNames) -RootAttributes ([System.IO.FileAttributes]::Directory)
         Invoke-FVProgress $Progress 'Checking every file was copied correctly...' 60
         $srcMan = Get-FVTreeManifest -Path $mount -Mode $VerifyMode -ExcludeTopLevel (Get-FVVolumeSystemNames)
         $dstMan = Get-FVTreeManifest -Path $restore -Mode $VerifyMode
         $cmp = Compare-FVManifest -Source $srcMan -Destination $dstMan
-        if (-not $cmp.Ok) { throw [System.IO.IOException]::new('verification mismatch') }
+        if (-not $cmp.Ok) {
+            $detail = Format-FVVerifyDetail -Compare $cmp -Source $srcMan -Destination $dstMan -CopyResult $copyResult
+            $log = Write-FVCopyCheckLog -Source $srcMan -Destination $dstMan -SourcePath $mount -DestinationPath $restore -Detail $detail
+            throw [System.IO.IOException]::new("$detail$(if ($log) { ". Details: $log" })")
+        }
     } catch {
         try { if (Test-Path -LiteralPath $restore) { Remove-FVTreeContents -Path $restore; [System.IO.Directory]::Delete($restore, $false) } } catch { Write-Verbose 'restore cleanup failed' }
         return (New-FVStep 'VerifyFailed' "$(Get-FVMessage 'VerifyFailed') ($($_.Exception.Message))")
@@ -634,7 +694,7 @@ function Clear-FVRecentItems {
 
 Export-ModuleMember -Function @(
     'Test-FVIsWindows', 'Test-FVReparsePath', 'Test-FVAncestorsClean', 'New-FVJunction', 'Get-FVLinkTarget', 'Remove-FVLink',
-    'Copy-FVTree', 'Copy-FVTreeManaged', 'Get-FVFolderCheck', 'Test-FVCanRename',
+    'Copy-FVTree', 'Copy-FVTreeManaged', 'Format-FVVerifyDetail', 'Write-FVCopyCheckLog', 'Get-FVFolderCheck', 'Test-FVCanRename',
     'Invoke-FVProtectFolder', 'Invoke-FVUnprotectFolder', 'Get-FVUnfinishedState', 'Resolve-FVUnfinished', 'Clear-FVRecentItems',
     'Get-FVProp', 'Close-FVExplorerWindows', 'Invoke-FVLockVault', 'Invoke-FVLockAll', 'ConvertTo-FVPlainLinkTarget'
 )

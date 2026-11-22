@@ -99,7 +99,11 @@ Get-ChildItem -LiteralPath (Join-Path $DataDir 'Vaults') -Filter '*.vhdx' -Error
 }
 Write-FVOk 'All protected folders are locked.'
 
-# 3. Menus, shortcuts, tray, Settings > Apps entry, program files.
+# 3. Screen lock: back to Windows' own setting if a Folder Vault installer changed it.
+$reset = Reset-FVScreenLock -Manifest (Read-FVInstallManifest -DataDir $DataDir)
+if ($null -ne $reset) { Write-FVOk $reset }
+
+# 4. Menus, shortcuts, tray, Settings > Apps entry, program files.
 foreach ($k in @('FolderVault.Protect', 'FolderVault.Unlock', 'FolderVault.Lock')) {
     $p = "HKLM:\SOFTWARE\Classes\Directory\shell\$k"
     if (Test-Path $p) { Remove-Item -Path $p -Recurse -Force }
@@ -112,7 +116,7 @@ if (Test-Path $appsKey) { Remove-Item -Path $appsKey -Recurse -Force }
 if (Test-Path -LiteralPath $InstallDir) { Remove-Item -LiteralPath $InstallDir -Recurse -Force }
 Write-FVOk 'Program, menus and shortcuts removed.'
 
-# 4. Data folder: only when nothing is protected.
+# 5. Data folder: only when nothing is protected.
 if ($LeaveVaultsInPlace) {
     Write-FVNote "Kept $DataDir (the locked, encrypted folders and their recovery records)."
     Write-FVNote 'The protected folders will show as empty until Folder Vault is installed again.'
