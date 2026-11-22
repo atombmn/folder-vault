@@ -3,6 +3,19 @@
 All notable changes. Versions before 0.4.0 were developed under an internal
 working name; they are listed here under the name Folder Vault.
 
+## 0.5.0 (22 November 2026)
+
+First version to protect and unlock a folder on Windows (tested on Windows 11
+with 0.4.6). No code change apart from the version number.
+
+### Documentation
+- No longer labelled a prototype. The status notes in README.md, SECURITY.md,
+  FOR-MANAGERS.md and SPECIFICATION.md (section 8) now say what has been
+  tried on Windows and what has not: locking with Win+L, changing a password,
+  removing protection, Windows 10 and the full Windows test programme are
+  still to do.
+- PUBLISHING.md: release steps written for any version.
+
 ## 0.4.6 (22 November 2026)
 
 ### Fixes

@@ -1,8 +1,9 @@
 # Security policy
 
-Folder Vault is a **prototype**. Its container code (BitLocker, VHDX) has not
-yet been run end to end on Windows, and the live purple team exercise has not
-been done. Do not rely on it for real data yet.
+Folder Vault 0.5.0 protects and unlocks folders on Windows 11. The full
+Windows test programme and the live purple team exercise have not been done
+yet, so test it on a computer that holds nothing important before relying on
+it. See the status note in [README.md](README.md).
 
 ## Reporting a vulnerability
 

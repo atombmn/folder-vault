@@ -120,6 +120,6 @@ Folder Vault is ready for real use when:
    High finding; and
 5. the managers accept the remaining risks in writing (FOR-MANAGERS.md).
 
-**Status at 0.4.0:** 1 passes; 2 to 5 are still to do. The installer,
-service, health check and folder rules have run on a Windows 11 test PC; the
-container work (BitLocker, VHDX, copying, linking) has not yet run on Windows.
+**Status at 0.5.0:** 1 passes. 3 is partly done: on a Windows 11 PC a
+folder outside the user folder has been protected and unlocked. 2, 4 and 5 are
+still to do.

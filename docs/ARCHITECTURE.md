@@ -1,6 +1,6 @@
 # Folder Vault: architecture and threat model
 
-Prototype version 0.3.
+Written for 0.3. The design is the same in 0.5.0; later changes are listed in CHANGELOG.md.
 
 > **In plain words.** This document is for the IT team's technical staff. It explains
 > how Folder Vault is built and which attacks it is designed to stop. In short:

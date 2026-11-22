@@ -133,25 +133,23 @@ Releases are where people download the install zips.
 pwsh -File build/Build-Package.ps1
 ```
 
-This makes `dist\FolderVault-0.4.0-client.zip` and `dist\FolderVault-0.4.0.zip`
-and prints two **fingerprints**. Then on GitHub:
+This makes `dist\FolderVault-<version>-client.zip` and
+`dist\FolderVault-<version>.zip` and prints two **fingerprints**. Then on GitHub:
 
 1. **Releases > Draft a new release**.
-2. **Choose a tag**: type `v0.4.0` and pick **Create new tag on publish**.
-3. Title: `Folder Vault 0.4.0 (prototype)`.
-4. Notes: paste the 0.4.0 section of `CHANGELOG.md`, then add:
+2. **Choose a tag**: type `v<version>` (for example `v0.5.0`) and pick
+   **Create new tag on publish**.
+3. Title: `Folder Vault <version>`.
+4. Notes: paste that version's section of `CHANGELOG.md`, then add:
 
    ```
    Package fingerprints (the installer shows these; they must match):
-     FolderVault-0.4.0-client.zip  XXXX XXXX XXXX XXXX
-     FolderVault-0.4.0.zip         XXXX XXXX XXXX XXXX
-
-   Prototype: the container code has not yet run end to end on Windows.
-   Do not use it for real data. See docs/SPECIFICATION.md, section 8.
+     FolderVault-<version>-client.zip  XXXX XXXX XXXX XXXX
+     FolderVault-<version>.zip         XXXX XXXX XXXX XXXX
    ```
 
-5. Drag both zips into the release, tick **Set as a pre-release**, and
-   **Publish release**.
+5. Drag both zips into the release and **Publish release**. Tick **Set as a
+   pre-release** only for a test build.
 
 ## 8. Later changes
 

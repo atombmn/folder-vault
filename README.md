@@ -13,13 +13,12 @@ Windows passwords, so signing in as a colleague was enough to read their
 files. Folder Vault makes a second password necessary for the folders that
 matter.
 
-> **Status: prototype (0.4.6).** 495 automated tests pass, and the installer,
-> background service, health check and folder rules have run on a real
-> Windows 11 PC. The first attempt to protect a folder there failed safely
-> and led to the fixes in 0.4.1 to 0.4.6; protecting, unlocking and locking have **not
-> yet completed on Windows**. Do not use it for real data until the Windows test
-> programme has passed on a test computer (see
-> [Testing](#testing) and [docs/SPECIFICATION.md](docs/SPECIFICATION.md#8-acceptance)).
+> **Status (0.5.0).** On a Windows 11 PC: installing, the health check,
+> protecting a folder and unlocking it all work. 495 automated tests run on
+> every change. Not yet tried on Windows: locking with Win+L, changing a
+> password, removing protection, Windows 10, and the full Windows test
+> programme. Try it on a test computer before trusting it with important files
+> (see [Testing](#testing) and [docs/SPECIFICATION.md](docs/SPECIFICATION.md#8-acceptance)).
 
 ## What it does
 
@@ -93,8 +92,8 @@ release's fingerprints (`SHA256SUMS.txt`).
 ```powershell
 # 1. Build the release zips (any computer with PowerShell 7)
 pwsh -File build/Build-Package.ps1
-#    -> dist/FolderVault-0.4.6-client.zip  (what a PC needs)
-#    -> dist/FolderVault-0.4.6.zip         (everything)
+#    -> dist/FolderVault-0.5.0-client.zip  (what a PC needs)
+#    -> dist/FolderVault-0.5.0.zip         (everything)
 
 # 2. Make a recovery key pair, once, on an IT admin machine (Windows)
 .\admin\New-FVEscrowCertificate.ps1 -ClientName Office -OutputDirectory C:\FVKeys

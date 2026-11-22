@@ -21,4 +21,3 @@
 | **Vault** | Another word for a protected folder. The encrypted container behind it is a `.vhdx` file in `C:\ProgramData\FolderVault\Vaults`. |
 | **Windows Home / Pro** | Editions of Windows. Folder Vault needs Pro, Enterprise or Education. |
 | **Purple team exercise** | A security test where one team attacks the system while another watches and checks it was noticed. |
-| **Prototype** | Working, tested in code and partly on a real computer, but not yet proven in daily use. |

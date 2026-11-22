@@ -1,6 +1,6 @@
 # Folder Vault: summary for managers
 
-Version 0.4.6, November 2026.
+Version 0.5.0, November 2026.
 
 ## The problem
 
@@ -76,13 +76,13 @@ one browser tab. The icon's figures will be measured by test W80.
 
 ## Where the project stands
 
-Folder Vault 0.4.6 is a **prototype**. Its logic has been checked with 495 automated
-tests and two line-by-line security reviews. The installer, background service
-and health check have run on a real Windows computer; the first try found and
-fixed four faults there. A second review before deployment (13 November 2026)
-found a fault that would have stopped any folder from being protected, and ten
-smaller ones; all are fixed. The part that protects, locks and unlocks folders
-has **not yet run on Windows**. Before it goes near the client's PCs, the IT team will:
+Folder Vault 0.5.0 has been checked with 495 automated tests and several
+line-by-line security reviews. On a real Windows 11 computer the installer,
+background service and health check run, and a folder has been protected and
+unlocked. Getting there found and fixed several faults, each of which failed
+safely (nothing was lost or exposed); they are listed in the changelog.
+Locking with the screen lock, changing a password and removing protection have
+not yet been tried on Windows. Before it goes near the client's PCs, the IT team will:
 
 1. run the full test programme on two test computers (Windows 11 Pro and Windows 10 Pro);
 2. run a two-day security exercise in which one team attacks it while another watches (a "purple team" exercise);

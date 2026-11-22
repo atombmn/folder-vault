@@ -1,11 +1,11 @@
-# Folder Vault: security audit report (pre-pilot)
+# Folder Vault: security audit report
 
-Audit of the prototype source code.
+Audit of the source code.
 Version 0.1 audited 29 October 2026; 0.2 changes reviewed 12 November 2026 (section 6);
 pre-deployment readiness audit of 0.2.4 on 13 November 2026 (section 7);
 review of the 0.3.0 "protect any folder" change on 20 November 2026 (section 8);
 publication review of 0.4.0 on 21 November 2026 (section 9);
-first protection attempt on Windows, 22 November 2026 (section 10).
+first protection attempts on Windows, 22 November 2026 (sections 10 and 11).
 
 > **In plain words.** We read every line of Folder Vault looking for ways it could
 > be broken into or could lose files, and ran hundreds of automated tests.
