@@ -30,5 +30,5 @@ made before a folder was protected. See `docs/ARCHITECTURE.md`, section 4.
 
 ## What has been reviewed
 
-See `docs/SECURITY-AUDIT.md` (findings A-01 to A-33, all closed) and
+See `docs/SECURITY-AUDIT.md` (findings A-01 to A-34, all closed) and
 `docs/PURPLE-TEAM-PLAN.md` (the attacks still to be run live).

@@ -286,6 +286,7 @@ checked, so nothing was changed, and the vault was removed.
 | ID | Sev. | Finding | Resolution |
 |---|---|---|---|
 | A-33 | High | The vault root's permissions were applied through its mount point folder (`Mounts\{id}`). Windows applies such permissions to the mount point folder, not to the mounted volume's root (Microsoft KB 237701, 832234), so the root kept its format-time permissions and its owner was refused. It failed closed (nothing was changed, no one else could read the vault) but no folder could be protected. The unit tests did not catch it because they replaced the permission step with a stand-in. | Permissions are set with `SetFileSecurity` on the volume's own path (`\\?\Volume{GUID}\`), read back, and compared entry by entry with what was asked for; any difference stops the creation and rolls it back. Windows test W26 now checks the root's permissions. |
+| A-34 | Medium | The second attempt (0.4.2) got past A-33 and the copy, then failed when the window set the vault root's attributes through `Mounts\{id}`: like permissions, attributes set through a mount point land on the mount point folder, which the person may only read. Failed closed. | The window no longer sets attributes on a mount point; the service sets "not indexed" on the root through the volume path when creating and on every unlock (a failure there does not block the unlock). |
 
 **Lesson.** Behaviour that depends on how Windows treats a mount point cannot
 be shown by a stand-in in a unit test. The Windows test programme (W10, W26)

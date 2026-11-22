@@ -16,7 +16,7 @@ Set-StrictMode -Version 3.0
 $script:FVProtocolVersion = 1
 $script:FVMaxFrameBytes   = 65536
 $script:FVPipeName        = 'FolderVaultBroker'
-$script:FVProductVersion  = '0.4.2'
+$script:FVProductVersion  = '0.4.3'
 
 # Names the broker places on the root of every vault volume that must never be
 # treated as user data.

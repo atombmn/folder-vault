@@ -3,6 +3,23 @@
 All notable changes. Versions before 0.4.0 were developed under an internal
 working name; they are listed here under the name Folder Vault.
 
+## 0.4.3 (22 November 2026)
+
+### Fixes
+- **Protecting a folder still failed**, now with "Exception setting
+  "Attributes": Access to the path is denied". After copying, the window set
+  the vault root's attributes through the mount point folder, and Windows
+  applied them to the mount point folder (which only the background service
+  may change) instead of the vault: the same Windows behaviour as A-33, for
+  attributes. The window now leaves a vault root's attributes alone; the
+  background service marks the root "not indexed" through the volume's own
+  path when it creates the vault and every time it unlocks it (A-34).
+  Restoring a folder still resets its attributes as before (A-21).
+
+### Added
+- Tests: attributes are never set through a mount point; the service marks
+  the root on every unlock, and a failure to mark it does not stop the unlock.
+
 ## 0.4.2 (22 November 2026)
 
 ### Fixes

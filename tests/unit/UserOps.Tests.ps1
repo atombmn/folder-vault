@@ -474,3 +474,28 @@ Describe '0.3.0: online-only files are refused with instructions' {
         } finally { Remove-Item -Recurse -Force $d }
     }
 }
+
+Describe 'A-34: Copy-FVTree leaves a vault root''s attributes to the background service' -Skip:($IsWindows) {
+    BeforeEach {
+        $script:base = Join-Path ([System.IO.Path]::GetTempPath()) ('fvatt-' + [guid]::NewGuid().ToString('N'))
+        [void](New-Item -ItemType Directory -Path "$base/src", "$base/realroot")
+        Set-Content -LiteralPath "$base/src/a.txt" -Value 'a'
+        $global:FVATT = New-Object System.Collections.Generic.List[string]
+        Mock -ModuleName FolderVault.UserOps Set-FVFolderAttributes { $global:FVATT.Add($Path) }
+    }
+    AfterEach { Remove-Item -Recurse -Force $base -ErrorAction SilentlyContinue }
+    It 'does not set attributes through a mount point (the 0.4.2 "Access to the path is denied")' {
+        # Stand-in for Mounts\{id}: a link to the vault's root.
+        [void](New-Item -ItemType SymbolicLink -Path "$base/mount" -Target "$base/realroot")
+        Mock -ModuleName FolderVault.Common Get-FVReparseTag { [Convert]::ToUInt32('A0000003', 16) }
+        Copy-FVTree -Source "$base/src" -Destination "$base/mount" -RootAttributes ([System.IO.FileAttributes]'Directory, NotContentIndexed')
+        $global:FVATT.Count | Should -Be 0
+        Test-Path "$base/realroot/a.txt" | Should -BeTrue
+    }
+    It 'still sets them on an ordinary folder (restoring a folder, A-21)' {
+        [void](New-Item -ItemType Directory -Path "$base/dest")
+        Copy-FVTree -Source "$base/src" -Destination "$base/dest"
+        @($global:FVATT) | Should -Be @("$base/dest")
+    }
+}
+

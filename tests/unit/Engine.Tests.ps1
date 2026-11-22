@@ -125,6 +125,7 @@ Describe 'Opening a container' {
         Mock -ModuleName FolderVault.Engine Test-FVMounted { $false }
         Mock -ModuleName FolderVault.Engine Invoke-FVMountvol { $script:calls.Add('mountvol') }
         Mock -ModuleName FolderVault.Engine Remove-FVUnlockShortcut { $script:calls.Add('noshortcut') }
+        Mock -ModuleName FolderVault.Engine Set-FVVolumeRootNotIndexed { $script:calls.Add("noindex:$VolumePath") }
     }
     It 'detaches again after a wrong password' {
         Mock -ModuleName FolderVault.Engine Unlock-FVBdeWithPassword { 'BadPassword' }
@@ -410,6 +411,31 @@ Describe 'Audit fix A-33: the vault root''s permissions are set on the volume, n
         $src = & (Get-Module FolderVault.Engine) { $script:FVVolumeAclSource }
         Add-Type -TypeDefinition $src.Replace('namespace FolderVault', 'namespace FolderVaultCompileTest')
         @([FolderVaultCompileTest.VolumeAcl].GetMethods() | Where-Object IsStatic | ForEach-Object Name) | Should -Contain 'Set'
+    }
+}
+
+Describe 'A-34: the vault root stays out of Windows Search after every unlock' {
+    BeforeEach {
+        $script:calls = New-Object System.Collections.Generic.List[string]
+        Mock -ModuleName FolderVault.Engine Test-Path { $true } -ParameterFilter { $LiteralPath -like '*.vhdx' }
+        Mock -ModuleName FolderVault.Engine Test-Path { $true } -ParameterFilter { $LiteralPath -like '*Mounts*' }
+        Mock -ModuleName FolderVault.Engine Test-FVVhdAttached { $false }
+        Mock -ModuleName FolderVault.Engine Mount-FVVhd { 7 }
+        Mock -ModuleName FolderVault.Engine Get-FVVolumePath { '\\?\Volume{aaaa}\' }
+        Mock -ModuleName FolderVault.Engine Get-FVLockStatus { 'Locked' }
+        Mock -ModuleName FolderVault.Engine Unlock-FVBdeWithPassword { 'Ok' }
+        Mock -ModuleName FolderVault.Engine Test-FVMounted { $false }
+        Mock -ModuleName FolderVault.Engine Invoke-FVMountvol { }
+        Mock -ModuleName FolderVault.Engine Remove-FVUnlockShortcut { }
+    }
+    It 'marks the root through the volume path when unlocking' {
+        Mock -ModuleName FolderVault.Engine Set-FVVolumeRootNotIndexed { $script:calls.Add("noindex:$VolumePath") }
+        (Open-FolderVaultContainer -Record (New-Rec) -Password 'yes' -Paths $paths).Ok | Should -BeTrue
+        $calls | Should -Contain 'noindex:\\?\Volume{aaaa}\'
+    }
+    It 'still unlocks if the mark cannot be set' {
+        Mock -ModuleName FolderVault.Engine Set-FVVolumeRootNotIndexed { throw 'denied' }
+        (Open-FolderVaultContainer -Record (New-Rec) -Password 'yes' -Paths $paths).Ok | Should -BeTrue
     }
 }
 

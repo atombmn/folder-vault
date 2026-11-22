@@ -1,6 +1,6 @@
 # Folder Vault: summary for managers
 
-Version 0.4.2, November 2026.
+Version 0.4.3, November 2026.
 
 ## The problem
 
@@ -75,7 +75,7 @@ one browser tab. The icon's figures will be measured by test W80.
 
 ## Where the project stands
 
-Folder Vault 0.4.2 is a **prototype**. Its logic has been checked with 464 automated
+Folder Vault 0.4.3 is a **prototype**. Its logic has been checked with 468 automated
 tests and two line-by-line security reviews. The installer, background service
 and health check have run on a real Windows computer; the first try found and
 fixed four faults there. A second review before deployment (13 November 2026)

@@ -13,10 +13,10 @@ Windows passwords, so signing in as a colleague was enough to read their
 files. Folder Vault makes a second password necessary for the folders that
 matter.
 
-> **Status: prototype (0.4.2).** 464 automated tests pass, and the installer,
+> **Status: prototype (0.4.3).** 468 automated tests pass, and the installer,
 > background service, health check and folder rules have run on a real
 > Windows 11 PC. The first attempt to protect a folder there failed safely
-> and led to the fixes in 0.4.1 and 0.4.2; protecting, unlocking and locking have **not
+> and led to the fixes in 0.4.1 to 0.4.3; protecting, unlocking and locking have **not
 > yet completed on Windows**. Do not use it for real data until the Windows test
 > programme has passed on a test computer (see
 > [Testing](#testing) and [docs/SPECIFICATION.md](docs/SPECIFICATION.md#8-acceptance)).
@@ -93,8 +93,8 @@ release's fingerprints (`SHA256SUMS.txt`).
 ```powershell
 # 1. Build the release zips (any computer with PowerShell 7)
 pwsh -File build/Build-Package.ps1
-#    -> dist/FolderVault-0.4.2-client.zip  (what a PC needs)
-#    -> dist/FolderVault-0.4.2.zip         (everything)
+#    -> dist/FolderVault-0.4.3-client.zip  (what a PC needs)
+#    -> dist/FolderVault-0.4.3.zip         (everything)
 
 # 2. Make a recovery key pair, once, on an IT admin machine (Windows)
 .\admin\New-FVEscrowCertificate.ps1 -ClientName Office -OutputDirectory C:\FVKeys
@@ -110,7 +110,7 @@ pwsh -File build/Build-Package.ps1
 
 | Layer | How | Where it runs |
 |---|---|---|
-| Unit tests (464, plus 2 that need Windows or a built package) | `Invoke-Pester ./tests/unit` | Any OS with PowerShell 7.4+ and Pester 6 (runs on every push, see `.github/workflows`) |
+| Unit tests (468, plus 2 that need Windows or a built package) | `Invoke-Pester ./tests/unit` | Any OS with PowerShell 7.4+ and Pester 6 (runs on every push, see `.github/workflows`) |
 | Static rules for Windows PowerShell 5.1 pitfalls | Part of the unit tests (`Static.Tests.ps1`) | Same |
 | .NET Framework 4.8 API check | `pwsh -File tests/tools/Get-FVReferenceAssemblies.ps1`, then the unit tests | Same |
 | PSScriptAnalyzer (5.1 compatibility profiles) | `Invoke-ScriptAnalyzer -Path src -Recurse -Settings ./PSScriptAnalyzerSettings.psd1` | Same |

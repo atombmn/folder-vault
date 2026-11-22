@@ -102,6 +102,13 @@ function Remove-FVLink {
     try { [System.IO.Directory]::Delete($Path, $false) } catch { [System.IO.File]::Delete($Path) }
 }
 
+function Set-FVFolderAttributes {
+    <# Sets a folder's attributes (a separate function so tests can see it called). #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][System.IO.FileAttributes]$Attributes)
+    if ($PSCmdlet.ShouldProcess($Path, 'Set attributes')) { (New-Object System.IO.DirectoryInfo($Path)).Attributes = $Attributes }
+}
+
 function Copy-FVTree {
     <# Copies the contents of $Source into $Destination as the current user. Links are never followed. #>
     [CmdletBinding()]
@@ -126,7 +133,14 @@ function Copy-FVTree {
         else { Copy-FVTreeCore -Source $Source -Destination $Destination -ExcludeTopLevel $ExcludeTopLevel }
     }
     finally {
-        if (Test-Path -LiteralPath $Destination) { (New-Object System.IO.DirectoryInfo($Destination)).Attributes = $RootAttributes }
+        if (Test-Path -LiteralPath $Destination) {
+            $d = New-Object System.IO.DirectoryInfo($Destination)
+            # A vault is reached through a mount point. Attributes set through a mount
+            # point land on the mount point folder, which only the background service
+            # may change, not on the vault's root (seen on the first PC, 0.4.2). The
+            # service keeps the vault root's own attributes (A-34).
+            if (-not (Test-FVIsReparse $d)) { Set-FVFolderAttributes -Path $Destination -Attributes $RootAttributes }
+        }
     }
 }
 

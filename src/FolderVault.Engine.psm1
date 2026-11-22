@@ -354,8 +354,20 @@ function Set-FVVolumeRootSecurity {
     if (-not (Test-FVSddlMatches -Actual $got -Expected $Sddl)) {
         throw [System.InvalidOperationException]::new("The vault's root permissions did not apply (wanted $Sddl, found $got)")
     }
-    # Keep Windows Search out of the vault, on the root itself (0x2000 = NOT_CONTENT_INDEXED).
-    $t::AddAttributes($root, [uint32]8192)
+    Set-FVVolumeRootNotIndexed -VolumePath $VolumePath
+}
+
+function Set-FVVolumeRootNotIndexed {
+    <#
+        Keeps Windows Search out of the vault by marking its root "not content
+        indexed" (0x2000), through the volume's own path. Done when a vault is
+        made and every time it is unlocked, because copying files in can clear it.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory)][string]$VolumePath)
+    if (-not $PSCmdlet.ShouldProcess($VolumePath, 'Set NotContentIndexed')) { return }
+    if (-not ('FolderVault.VolumeAcl' -as [type])) { Add-Type -TypeDefinition $script:FVVolumeAclSource -ErrorAction Stop }
+    ('FolderVault.VolumeAcl' -as [type])::AddAttributes($VolumePath.TrimEnd('\') + '\', [uint32]8192)
 }
 
 function Set-FVNotIndexed {
@@ -703,6 +715,8 @@ function Open-FolderVaultContainer {
             Remove-FVUnlockShortcut -Files $f
             Invoke-FVMountvol -MountPath $f.Mount -VolumePath $vol
         }
+        # Best effort: a failure here must not stop the person opening their folder.
+        try { Set-FVVolumeRootNotIndexed -VolumePath $vol } catch { Write-Verbose "not-indexed mark: $($_.Exception.Message)" }
         return (New-FVEngineResult -Ok $true -Code 'Ok' -Stage 'Done' -Data ([pscustomobject]@{ MountPath = $f.Mount }))
     } catch {
         $detail = "$stage : $($_.Exception.Message)"
@@ -938,7 +952,7 @@ function Get-FVSessionStates {
 Export-ModuleMember -Function @(
     'Get-FolderVaultFiles', 'Invoke-FVDiskpartCreate', 'Mount-FVVhd', 'Assert-FolderVaultDisk', 'Test-FVDiskIsBlank', 'Remove-FVDriveLetters', 'Dismount-FVVhd', 'Test-FVVhdAttached',
     'Initialize-FolderVaultDisk', 'Get-FVVolumePath', 'Get-FVBdeVolume', 'Invoke-FVBde', 'Invoke-FVMountvol', 'Test-FVMounted',
-    'Set-FVSecurity', 'Set-FVVolumeRootSecurity', 'Test-FVSddlMatches', 'Get-FVAceSet', 'Set-FVNotIndexed', 'New-FVPrivateDirectory', 'Test-FVEscrowCertificate', 'Protect-FVRecoveryKey',
+    'Set-FVSecurity', 'Set-FVVolumeRootSecurity', 'Set-FVVolumeRootNotIndexed', 'Test-FVSddlMatches', 'Get-FVAceSet', 'Set-FVNotIndexed', 'New-FVPrivateDirectory', 'Test-FVEscrowCertificate', 'Protect-FVRecoveryKey',
     'Get-FVLockStatus', 'Unlock-FVBdeWithPassword', 'Unlock-FVBdeWithRecovery', 'Lock-FVBde',
     'Get-FVProtectorIds', 'Add-FVPassphraseProtector', 'Add-FVRecoveryProtector', 'Remove-FVProtector', 'Start-FVBdeEncryption',
     'New-FolderVaultContainer', 'Remove-FolderVaultArtifacts', 'Get-FolderVaultRuntime', 'Open-FolderVaultContainer', 'Close-FolderVaultContainer',
