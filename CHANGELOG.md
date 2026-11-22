@@ -3,6 +3,29 @@
 All notable changes. Versions before 0.4.0 were developed under an internal
 working name; they are listed here under the name Folder Vault.
 
+## 0.4.4 (22 November 2026)
+
+### Fixes
+- **Protecting a folder was still refused** ("Access to the path
+  ...\Mounts\{id} is denied") after 0.4.1 and 0.4.3. Vaults were attached
+  with `Mount-DiskImage`. Microsoft documents that a virtual disk attached
+  without a security descriptor of its own takes the descriptor of its
+  .vhdx file, and Folder Vault's .vhdx files can be opened only by SYSTEM and
+  Administrators, so the attached disk turned away everyone else, its owner
+  included. Vaults are now attached with diskpart's `attach vdisk`, which by
+  default gives the disk no descriptor, so it behaves like a physical disk
+  and the vault root's own permissions (A-33) decide who gets in (A-35). Any
+  drive letter Windows gives an attached vault is removed.
+
+### Added
+- `admin\Test-FVVaultAccess.ps1`: a three-step check for IT (set up as
+  administrator, check as the person, clean up) that builds two small test
+  disks, attached both ways, and reports exactly what the person can and
+  cannot do with each. Changes nothing in Folder Vault.
+- Tests: vaults are attached with diskpart, never twice, with any drive letter
+  removed; diskpart paths cannot carry extra commands; a static check that no
+  program code calls `Mount-DiskImage`.
+
 ## 0.4.3 (22 November 2026)
 
 ### Fixes

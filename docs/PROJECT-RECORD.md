@@ -73,6 +73,7 @@ Details: [ARCHITECTURE.md](ARCHITECTURE.md).
 | 22 Nov | 0.4.1 | **First protection attempt on Windows** failed safely: the vault's root permissions had been set through its mount point folder, which Windows applies to that folder instead (A-33). Fixed by setting them on the volume itself and checking them. |
 | 22 Nov | 0.4.2 | Updating to 0.4.1 stopped at step 2: the old service ended by itself just before the installer ended it, and that counted as an error. Fixed. |
 | 22 Nov | 0.4.3 | Second protection attempt got past the permissions and the copy, then failed setting the vault root's attributes through its mount point, which Windows applies to the mount point folder (A-34). The window now leaves them to the service. |
+| 22 Nov | 0.4.4 | Third attempt still refused: vaults attached with Mount-DiskImage take the .vhdx file's SYSTEM-only permissions (A-35). Now attached with diskpart. Diagnostic `Test-FVVaultAccess.ps1` added. |
 
 ## 4. What has been verified, and how
 
@@ -95,7 +96,7 @@ Framework 4.8 reference assemblies; static rules for the Windows PowerShell
 5.1 faults found so far; planted-defect (mutation) checks on each fix.
 
 Unit tests: 282 (0.1.0) > 336 (0.2.1) > 364 (0.2.3) > 371 (0.2.4) >
-407 (0.2.5) > 445 (0.3.0) > 455 (0.4.0) > 459 (0.4.1) > 464 (0.4.2) > 468 (0.4.3), plus 1 that runs only on Windows.
+407 (0.2.5) > 445 (0.3.0) > 455 (0.4.0) > 459 (0.4.1) > 464 (0.4.2) > 468 (0.4.3) > 479 (0.4.4), plus 1 that runs only on Windows.
 
 ## 5. Security work
 

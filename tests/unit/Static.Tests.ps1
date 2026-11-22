@@ -219,3 +219,19 @@ Describe '0.4.2: processes are stopped only through Stop-FVProcesses' {
         $hits | Should -BeNullOrEmpty
     }
 }
+
+Describe 'A-35: no vault is attached with Mount-DiskImage' {
+    It 'src never calls Mount-DiskImage (the attached disk would take the .vhdx file''s SYSTEM-only permissions)' {
+        $root = Join-Path $PSScriptRoot '..\..'
+        # admin\Test-FVVaultAccess.ps1 uses it on purpose, to compare the two ways of attaching.
+        $hits = @(Get-ChildItem -Recurse -Include *.ps1, *.psm1 -Path (Join-Path $root 'src'), (Join-Path $root 'install') |
+            ForEach-Object {
+                $t = $null; $e = $null
+                $ast = [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$t, [ref]$e)
+                $f = $_.Name
+                $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Mount-DiskImage' }, $true) | ForEach-Object { "${f}:$($_.Extent.StartLineNumber)" }
+            })
+        $hits | Should -BeNullOrEmpty
+    }
+}
+

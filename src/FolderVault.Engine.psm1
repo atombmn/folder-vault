@@ -79,21 +79,48 @@ function Invoke-FVDiskpartCreate {
     }
 }
 
+function Invoke-FVDiskpartAttach {
+    <#
+        Attaches a VHDX with diskpart, with no security descriptor of its own.
+        Microsoft documents that a virtual disk attached without one takes the
+        security descriptor of the .vhdx file, and that a disk which does not
+        let a person in stops them using it. Folder Vault's .vhdx files may be
+        opened only by SYSTEM and Administrators, so a disk attached with
+        Mount-DiskImage refused its owner ("Access to the path ... is denied",
+        A-35). diskpart's "attach vdisk" without sd= or usefilesd gives the disk
+        no descriptor of its own, so it behaves like a physical disk and the
+        file permissions on the vault's root decide who gets in.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory)][string]$VhdxPath)
+    if ($VhdxPath -notmatch '^[A-Za-z]:\\[^"\r\n]+\.vhdx$') { throw [System.ArgumentException]::new('Bad VHDX path') }
+    if (-not $PSCmdlet.ShouldProcess($VhdxPath, 'Attach VHDX')) { return }
+    $script = Join-FVPath (Split-Path -Parent $VhdxPath) ("dp-" + [guid]::NewGuid().ToString() + '.txt')
+    $content = "select vdisk file=`"$VhdxPath`"`r`nattach vdisk`r`nexit`r`n"
+    [System.IO.File]::WriteAllText($script, $content, [System.Text.Encoding]::ASCII)
+    try {
+        $r = Invoke-FVNative -FilePath "$env:SystemRoot\System32\diskpart.exe" -ArgumentList @('/s', $script)
+        if ($r.ExitCode -ne 0) { throw [System.InvalidOperationException]::new("diskpart attach failed ($($r.ExitCode)): " + $r.Text) }
+    } finally {
+        Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Mount-FVVhd {
     <# Attaches the VHDX without a drive letter and returns the disk number. #>
     [CmdletBinding()]
     [OutputType([int])]
     param([Parameter(Mandatory)][string]$VhdxPath)
     $img = Get-DiskImage -ImagePath $VhdxPath -ErrorAction Stop
-    if (-not $img.Attached) {
-        $img = Mount-DiskImage -ImagePath $VhdxPath -StorageType VHDX -NoDriveLetter -PassThru -ErrorAction Stop
-    }
+    if (-not $img.Attached) { Invoke-FVDiskpartAttach -VhdxPath $VhdxPath }
     for ($i = 0; $i -lt 20; $i++) {
         $img = Get-DiskImage -ImagePath $VhdxPath -ErrorAction SilentlyContinue
         if ($null -ne $img -and $img.Attached -and $null -ne $img.Number) {
             $disk = Get-Disk -Number ([int]$img.Number) -ErrorAction SilentlyContinue
             if ($null -ne $disk) {
                 Assert-FolderVaultDisk -Disk $disk -Image $img -VhdxPath $VhdxPath
+                # diskpart may give an existing vault's volume a drive letter; never keep one (A-23).
+                try { Remove-FVDriveLetters -DiskNumber ([int]$disk.Number) } catch { Write-Verbose "drive letter: $($_.Exception.Message)" }
                 return [int]$disk.Number
             }
         }
@@ -950,7 +977,7 @@ function Get-FVSessionStates {
 }
 
 Export-ModuleMember -Function @(
-    'Get-FolderVaultFiles', 'Invoke-FVDiskpartCreate', 'Mount-FVVhd', 'Assert-FolderVaultDisk', 'Test-FVDiskIsBlank', 'Remove-FVDriveLetters', 'Dismount-FVVhd', 'Test-FVVhdAttached',
+    'Get-FolderVaultFiles', 'Invoke-FVDiskpartCreate', 'Invoke-FVDiskpartAttach', 'Mount-FVVhd', 'Assert-FolderVaultDisk', 'Test-FVDiskIsBlank', 'Remove-FVDriveLetters', 'Dismount-FVVhd', 'Test-FVVhdAttached',
     'Initialize-FolderVaultDisk', 'Get-FVVolumePath', 'Get-FVBdeVolume', 'Invoke-FVBde', 'Invoke-FVMountvol', 'Test-FVMounted',
     'Set-FVSecurity', 'Set-FVVolumeRootSecurity', 'Set-FVVolumeRootNotIndexed', 'Test-FVSddlMatches', 'Get-FVAceSet', 'Set-FVNotIndexed', 'New-FVPrivateDirectory', 'Test-FVEscrowCertificate', 'Protect-FVRecoveryKey',
     'Get-FVLockStatus', 'Unlock-FVBdeWithPassword', 'Unlock-FVBdeWithRecovery', 'Lock-FVBde',

@@ -82,13 +82,13 @@ change, and unzip Folder Vault into it:
    if the zip file is in your Downloads folder:
 
    ```
-   Expand-Archive "$env:USERPROFILE\Downloads\FolderVault-0.4.3-client.zip" C:\FVInstall
+   Expand-Archive "$env:USERPROFILE\Downloads\FolderVault-0.4.4-client.zip" C:\FVInstall
    ```
 
-4. Copy the client's **.cer** file into `C:\FVInstall\FolderVault-0.4.3-client`,
+4. Copy the client's **.cer** file into `C:\FVInstall\FolderVault-0.4.4-client`,
    next to Install.cmd (File Explorer will ask for administrator permission:
    click **Continue**).
-5. Double-click `C:\FVInstall\FolderVault-0.4.3-client\Check-ThisPC.cmd`, then
+5. Double-click `C:\FVInstall\FolderVault-0.4.4-client\Check-ThisPC.cmd`, then
    **Install.cmd** in the same folder. The installer should now show no
    warning about who could change the folder.
 6. When every computer is done, delete `C:\FVInstall` from the same
@@ -310,4 +310,5 @@ unlocked: that would copy the files unencrypted.
 | A folder named `...foldervault-original-...` appeared | A file changed while the folder was being protected, so Folder Vault kept the original. Copy any newer file into the protected folder, then delete that one |
 | Ctrl+Alt+L does nothing | Windows picks up new shortcut keys at sign-in. Sign out and back in |
 | "Some files in that folder are only in OneDrive online" | In File Explorer, right-click the folder > **Always keep on this device**, wait for the green ticks, try again |
+| Protecting fails with "Access to the path ...\Mounts\... is denied" | Run `admin\Test-FVVaultAccess.ps1`: `-Setup` as administrator, `-Check` as the person in ordinary PowerShell, then `-Cleanup` as administrator. Send the file it saves on the desktop to your support contact |
 | "That folder cannot be protected" for a folder the person owns | Read the reason in the window, then the table in 5.6. A folder on another drive also needs `AllowFoldersOutsideProfile` on |

@@ -439,3 +439,28 @@ Describe 'A-34: the vault root stays out of Windows Search after every unlock' {
     }
 }
 
+Describe 'A-35: vaults are attached with diskpart, so the disk takes no permissions from the .vhdx file' {
+    BeforeEach {
+        $global:FVAT = @{ attached = $false; calls = New-Object System.Collections.Generic.List[string] }
+        Mock -ModuleName FolderVault.Engine Get-DiskImage { [pscustomobject]@{ ImagePath = 'C:\ProgramData\FolderVault\Vaults\a.vhdx'; Attached = $global:FVAT.attached; Number = $(if ($global:FVAT.attached) { 5 } else { $null }) } }
+        Mock -ModuleName FolderVault.Engine Invoke-FVDiskpartAttach { $global:FVAT.calls.Add("attach:$VhdxPath"); $global:FVAT.attached = $true }
+        Mock -ModuleName FolderVault.Engine Mount-DiskImage { throw 'Mount-DiskImage must not be used (A-35)' }
+        Mock -ModuleName FolderVault.Engine Get-Disk { [pscustomobject]@{ Number = 5; BusType = 15; PartitionStyle = 1 } }
+        Mock -ModuleName FolderVault.Engine Remove-FVDriveLetters { $global:FVAT.calls.Add("noletter:$DiskNumber") }
+        Mock -ModuleName FolderVault.Engine Start-Sleep { }
+    }
+    It 'attaches a detached vault with diskpart and removes any drive letter' {
+        Mount-FVVhd -VhdxPath 'C:\ProgramData\FolderVault\Vaults\a.vhdx' | Should -Be 5
+        @($global:FVAT.calls) | Should -Be @('attach:C:\ProgramData\FolderVault\Vaults\a.vhdx', 'noletter:5')
+    }
+    It 'does not attach again a vault that is already attached' {
+        $global:FVAT.attached = $true
+        Mount-FVVhd -VhdxPath 'C:\ProgramData\FolderVault\Vaults\a.vhdx' | Should -Be 5
+        @($global:FVAT.calls) | Should -Not -Contain 'attach:C:\ProgramData\FolderVault\Vaults\a.vhdx'
+    }
+    It 'refuses a path that could inject diskpart commands' {
+        { Invoke-FVDiskpartAttach -VhdxPath "C:\x`"`r`nclean`r`n.vhdx" } | Should -Throw '*Bad VHDX path*'
+        { Invoke-FVDiskpartAttach -VhdxPath 'relative\a.vhdx' } | Should -Throw '*Bad VHDX path*'
+    }
+}
+
