@@ -210,3 +210,12 @@ Describe '0.3.0: no hex numbers that PowerShell turns negative' {
         $bad | Should -BeNullOrEmpty
     }
 }
+
+Describe '0.4.2: processes are stopped only through Stop-FVProcesses' {
+    It 'no script ends a process with WMI Terminate (fails when the process has already gone)' {
+        $root = Join-Path $PSScriptRoot '..\..'
+        $hits = @(Get-ChildItem -Recurse -Include *.ps1, *.psm1 -Path (Join-Path $root 'src'), (Join-Path $root 'install'), (Join-Path $root 'admin') |
+            Select-String -Pattern "MethodName\s+Terminate" | ForEach-Object { "$($_.Filename):$($_.LineNumber)" })
+        $hits | Should -BeNullOrEmpty
+    }
+}

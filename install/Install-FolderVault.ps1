@@ -204,9 +204,8 @@ $oldManifest = Join-Path $DataDir 'install-manifest.json'
 if (Test-Path -LiteralPath $oldManifest) { try { $oldVersion = (ConvertFrom-Json ([System.IO.File]::ReadAllText($oldManifest))).version } catch { $oldVersion = '(unknown)' } }
 if ($null -ne $existing) {
     Stop-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction SilentlyContinue
-    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like '*FolderVault.Broker.ps1*' -or $_.CommandLine -like '*FolderVault.UI.ps1*-Action Tray*' -or $_.CommandLine -like '*FolderVault.Tray.ps1*' } |
-        ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate | Out-Null }
-    Start-Sleep -Seconds 2
+    $left = @(Stop-FVProcesses -CommandLineLike @('*FolderVault.Broker.ps1*', '*FolderVault.Tray.ps1*'))
+    if ($left.Count -gt 0) { Stop-Install "The old Folder Vault background service did not stop (process $($left -join ', '))." 'Restart this PC, then run Install.cmd again.' }
     Write-FVOk "Updating from version $oldVersion. Protected folders stay protected; they are locked now."
 } else {
     Write-FVOk 'No older copy found. This is a new installation.'

@@ -88,8 +88,8 @@ if (Get-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction Silen
     Stop-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $taskName -TaskPath $taskPath -Confirm:$false
 }
-Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like '*FolderVault.*.ps1*' -and $_.ProcessId -ne $PID } |
-    ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate | Out-Null }
+$left = @(Stop-FVProcesses -CommandLineLike @('*FolderVault.*.ps1*'))
+if ($left.Count -gt 0) { Write-FVWarn "Some Folder Vault windows did not close (process $($left -join ', '))." 'If removal fails, restart the PC and run Uninstall.cmd again.' }
 Write-FVOk 'Background service stopped.'
 
 # 2. Lock anything still open.

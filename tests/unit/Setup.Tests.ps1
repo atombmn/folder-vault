@@ -104,3 +104,46 @@ Describe 'Private set-up folder' -Skip:(-not $IsWindows -and $PSVersionTable.PSE
         } finally { Remove-FVAdminOnlyFolder -Path $p }
     }
 }
+
+Describe 'Stopping old Folder Vault processes (0.4.2)' {
+    BeforeAll {
+        # Get-CimInstance exists only on Windows; Pester needs a command to mock.
+        if (-not (Get-Command Get-CimInstance -ErrorAction SilentlyContinue)) { function global:Get-CimInstance { param([string]$ClassName, [string]$Filter, $ErrorAction) } }
+    }
+    BeforeEach {
+        $global:FVSP = @{ stopped = New-Object System.Collections.Generic.List[int]; alive = @{ 101 = $true; 102 = $true; 103 = $true } }
+        Mock -ModuleName FolderVault.Setup Get-CimInstance { @(
+                [pscustomobject]@{ ProcessId = 101; CommandLine = 'powershell.exe -File "C:\Program Files\FolderVault\FolderVault.Broker.ps1"' }
+                [pscustomobject]@{ ProcessId = 102; CommandLine = 'powershell.exe -File C:\Other\script.ps1' }
+                [pscustomobject]@{ ProcessId = 103; CommandLine = 'powershell.exe -File "C:\Program Files\FolderVault\FolderVault.Tray.ps1"' }) }
+        Mock -ModuleName FolderVault.Setup Get-Process { if ($global:FVSP.alive[[int]$Id[0]]) { [pscustomobject]@{ Id = $Id[0] } } }
+        Mock -ModuleName FolderVault.Setup Start-Sleep { }
+    }
+    It 'stops only matching processes and waits until they are gone' {
+        Mock -ModuleName FolderVault.Setup Stop-Process { $global:FVSP.stopped.Add([int]$Id[0]); $global:FVSP.alive[[int]$Id[0]] = $false }
+        $left = @(Stop-FVProcesses -CommandLineLike @('*FolderVault.Broker.ps1*', '*FolderVault.Tray.ps1*') -ExceptProcessId 1)
+        $left.Count | Should -Be 0
+        @($global:FVSP.stopped) | Should -Be @(101, 103)
+    }
+    It 'is not upset by a process that ended by itself before it could be stopped (the 0.4.1 installer error)' {
+        # The background service ends because its scheduled task was stopped, between listing and stopping.
+        Mock -ModuleName FolderVault.Setup Stop-Process {
+            if ([int]$Id[0] -eq 101) { $global:FVSP.alive[101] = $false; throw [Microsoft.PowerShell.Commands.ProcessCommandException]::new("Cannot find a process with the process identifier $($Id[0]).") }
+            $global:FVSP.alive[[int]$Id[0]] = $false
+        }
+        $old = $global:ErrorActionPreference; $global:ErrorActionPreference = 'Stop'
+        try { $left = @(Stop-FVProcesses -CommandLineLike @('*FolderVault.Broker.ps1*', '*FolderVault.Tray.ps1*') -ExceptProcessId 1) }
+        finally { $global:ErrorActionPreference = $old }
+        $left.Count | Should -Be 0
+    }
+    It 'reports a process that will not stop' {
+        Mock -ModuleName FolderVault.Setup Stop-Process { throw [System.ComponentModel.Win32Exception]::new(5) }
+        $left = @(Stop-FVProcesses -CommandLineLike @('*FolderVault.Broker.ps1*') -ExceptProcessId 1 -WaitSeconds 0)
+        $left | Should -Be @(101)
+    }
+    It 'never stops itself' {
+        Mock -ModuleName FolderVault.Setup Stop-Process { $global:FVSP.stopped.Add([int]$Id[0]); $global:FVSP.alive[[int]$Id[0]] = $false }
+        [void](Stop-FVProcesses -CommandLineLike @('*FolderVault*') -ExceptProcessId 101)
+        @($global:FVSP.stopped) | Should -Not -Contain 101
+    }
+}

@@ -3,6 +3,23 @@
 All notable changes. Versions before 0.4.0 were developed under an internal
 working name; they are listed here under the name Folder Vault.
 
+## 0.4.2 (22 November 2026)
+
+### Fixes
+- **Updating stopped at step 2** with "Invoke-CimMethod : Not found". The
+  installer stops the old background service's scheduled task, then ends any
+  Folder Vault processes still running. The service often ended by itself in
+  between, and asking Windows to end a process that had already gone was
+  treated as a fatal error. Processes are now ended with one shared function,
+  `Stop-FVProcesses`, which ignores processes that have already gone, waits up
+  to 10 seconds for the rest, and says so plainly if one will not stop. The
+  uninstaller uses it too.
+
+### Added
+- Four unit tests for stopping processes (including the one that has already
+  gone, with ErrorActionPreference set to Stop), and a static check that no
+  script ends a process with the WMI Terminate method.
+
 ## 0.4.1 (22 November 2026)
 
 First fault found when protecting a folder on a real Windows PC.

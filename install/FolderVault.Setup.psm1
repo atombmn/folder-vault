@@ -330,6 +330,38 @@ function Get-FVPackageWriters {
     return @($names)
 }
 
+function Stop-FVProcesses {
+    <#
+        Ends the Windows PowerShell processes whose command line matches any of
+        $CommandLineLike (except this one) and waits for them to go. A process
+        that ends by itself in the meantime is not an error: Stop-ScheduledTask
+        ends the background service while this runs (fix for 0.4.1, seen on the
+        first update). Returns the ids of any that are still running.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)][string[]]$CommandLineLike,
+        [int]$ExceptProcessId = $PID,
+        [int]$WaitSeconds = 10
+    )
+    $found = @(Get-CimInstance -ClassName Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object {
+            $cl = [string]$_.CommandLine
+            ([int]$_.ProcessId -ne $ExceptProcessId) -and (@($CommandLineLike | Where-Object { $cl -like $_ }).Count -gt 0)
+        } | ForEach-Object { [int]$_.ProcessId })
+    foreach ($id in $found) {
+        if (-not $PSCmdlet.ShouldProcess("process $id", 'Stop')) { continue }
+        try { Stop-Process -Id $id -Force -ErrorAction Stop }
+        catch { Write-Verbose "Process ${id}: $($_.Exception.Message)" }   # usually: it has already ended
+    }
+    $deadline = (Get-Date).AddSeconds($WaitSeconds)
+    do {
+        $left = @($found | Where-Object { $null -ne (Get-Process -Id $_ -ErrorAction SilentlyContinue) })
+        if ($left.Count -eq 0) { return @() }
+        Start-Sleep -Milliseconds 250
+    } while ((Get-Date) -lt $deadline)
+    return $left
+}
+
 function New-FVAdminOnlyFolder {
     <#
         Makes a new, empty folder under C:\Windows\Temp that only SYSTEM and
@@ -364,5 +396,5 @@ Export-ModuleMember -Function @(
     'Test-FVElevated', 'Start-FVElevated', 'Write-FVTitle', 'Write-FVStep', 'Write-FVOk', 'Write-FVNote', 'Write-FVWarn', 'Write-FVProblem',
     'Wait-FVKey', 'Read-FVYes', 'Get-FVReadiness', 'Write-FVReadiness', 'Find-FVEscrowCertificate',
     'Read-FVChecksumFile', 'Test-FVPackageIntegrity', 'Get-FVPackageFingerprint', 'Get-FVUntrustedWriter', 'Get-FVLocalAdminSids',
-    'Get-FVPackageWriters', 'New-FVAdminOnlyFolder', 'Remove-FVAdminOnlyFolder'
+    'Get-FVPackageWriters', 'Stop-FVProcesses', 'New-FVAdminOnlyFolder', 'Remove-FVAdminOnlyFolder'
 )

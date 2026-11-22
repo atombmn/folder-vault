@@ -82,13 +82,13 @@ change, and unzip Folder Vault into it:
    if the zip file is in your Downloads folder:
 
    ```
-   Expand-Archive "$env:USERPROFILE\Downloads\FolderVault-0.4.1-client.zip" C:\FVInstall
+   Expand-Archive "$env:USERPROFILE\Downloads\FolderVault-0.4.2-client.zip" C:\FVInstall
    ```
 
-4. Copy the client's **.cer** file into `C:\FVInstall\FolderVault-0.4.1-client`,
+4. Copy the client's **.cer** file into `C:\FVInstall\FolderVault-0.4.2-client`,
    next to Install.cmd (File Explorer will ask for administrator permission:
    click **Continue**).
-5. Double-click `C:\FVInstall\FolderVault-0.4.1-client\Check-ThisPC.cmd`, then
+5. Double-click `C:\FVInstall\FolderVault-0.4.2-client\Check-ThisPC.cmd`, then
    **Install.cmd** in the same folder. The installer should now show no
    warning about who could change the folder.
 6. When every computer is done, delete `C:\FVInstall` from the same
