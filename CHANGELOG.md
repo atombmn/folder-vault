@@ -3,6 +3,26 @@
 All notable changes. Versions before 0.4.0 were developed under an internal
 working name; they are listed here under the name Folder Vault.
 
+## 0.4.6 (22 November 2026)
+
+### Fixes
+- **Protecting a folder failed with "The copy could not be verified"**. The
+  detail added in 0.4.5 showed robocopy reporting "ERROR 5 Accessing
+  Destination Directory ...\Mounts\{id}\ Access is denied" and then exiting
+  with code 0, having copied nothing. robocopy opens the top folder it is
+  given to set its attributes and dates; on a mount point those land on the
+  mount point folder, which the person may only read (the same Windows
+  behaviour as A-33 and A-34). robocopy is now never given the top of either
+  side: each top-level folder gets its own robocopy run, and top-level files
+  are copied directly with their attributes and dates (A-37).
+- A robocopy line saying it could not open a source or destination folder now
+  counts as failure even when the exit code says success.
+
+### Added
+- Tests: robocopy is only given folders below the top (by behaviour and by a
+  static check, both shown to catch the old code); a refused folder with exit
+  code 0 stops the copy; a file that was retried and then copied does not.
+
 ## 0.4.5 (22 November 2026)
 
 ### Changes

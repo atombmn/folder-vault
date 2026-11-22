@@ -196,21 +196,70 @@ function Write-FVCopyCheckLog {
     } catch { return $null }
 }
 
-function Copy-FVTreeCore {
-    param([string]$Source, [string]$Destination, [string[]]$ExcludeTopLevel = @())
-    if (Test-FVIsWindows) {
-        $robo = Join-Path $env:SystemRoot 'System32\robocopy.exe'
-        $roboArgs = @($Source, $Destination, '/E', '/COPY:DAT', '/DCOPY:DAT', '/XJ', '/R:2', '/W:1', '/NP', '/NFL', '/NDL', '/NJH', '/NJS')
-        if ($ExcludeTopLevel.Count -gt 0) {
-            $roboArgs += '/XD'
-            foreach ($x in $ExcludeTopLevel) { $roboArgs += (Join-Path $Source $x) }
-        }
-        $r = Invoke-FVNative -FilePath $robo -ArgumentList $roboArgs
-        # robocopy: 0-7 mean success (files copied, extras found); 8 and above mean failure.
-        if ($r.ExitCode -ge 8) { throw [System.IO.IOException]::new("Copy failed (robocopy $($r.ExitCode)): " + $r.Text) }
-        return $r
+function Test-FVRobocopyFailed {
+    <#
+        True when a robocopy run failed. Exit codes 8 and above are failures,
+        but robocopy also exits 0 when it cannot open the folder it was given
+        at all ("ERROR 5 (0x00000005) Accessing Destination Directory"), having
+        copied nothing (seen in 0.4.5, A-37). Those lines count as failure too.
+    #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param([Parameter(Mandatory)]$Result)
+    if ([int]$Result.ExitCode -ge 8) { return $true }
+    foreach ($line in @($Result.Output)) {
+        if ([string]$line -match 'ERROR \d+ \(0x[0-9A-Fa-f]{8}\) Accessing (Source|Destination) Directory') { return $true }
     }
-    Copy-FVTreeManaged -Source $Source -Destination $Destination -ExcludeTopLevel $ExcludeTopLevel
+    return $false
+}
+
+function Copy-FVFileWithTimes {
+    <# One file, with its attributes (CopyFile keeps them) and its created and modified times. #>
+    param([Parameter(Mandatory)][System.IO.FileInfo]$File, [Parameter(Mandatory)][string]$Target)
+    [System.IO.File]::Copy($File.FullName, $Target, $true)
+    $t = New-Object System.IO.FileInfo($Target)
+    $ro = $t.IsReadOnly
+    if ($ro) { $t.IsReadOnly = $false }
+    $t.CreationTimeUtc = $File.CreationTimeUtc
+    $t.LastWriteTimeUtc = $File.LastWriteTimeUtc
+    if ($ro) { $t.IsReadOnly = $true }
+}
+
+function Copy-FVTreeCore {
+    <#
+        Copies the contents of $Source into $Destination.
+        One side is always a vault's mount point (Mounts\{id}). Windows applies
+        anything done to a mount point folder itself (permissions, attributes,
+        dates) to that folder, which the person may only read, not to the
+        vault (A-33, A-34). robocopy opens the top folder it is given to set
+        its attributes and dates, so given the mount point it was refused and
+        copied nothing (A-37). So robocopy is only ever given folders below
+        the top: each top-level folder is copied by its own robocopy run, and
+        top-level files are copied directly.
+    #>
+    param([string]$Source, [string]$Destination, [string[]]$ExcludeTopLevel = @())
+    if (-not (Test-FVIsWindows)) { Copy-FVTreeManaged -Source $Source -Destination $Destination -ExcludeTopLevel $ExcludeTopLevel; return }
+    $robo = Join-Path $env:SystemRoot 'System32\robocopy.exe'
+    $codes = New-Object System.Collections.Generic.List[int]
+    $texts = New-Object System.Collections.Generic.List[string]
+    $src = New-Object System.IO.DirectoryInfo($Source)
+    foreach ($e in @($src.EnumerateFileSystemInfos())) {
+        if ($ExcludeTopLevel -contains $e.Name) { continue }
+        if (Test-FVIsReparse $e) { continue }   # links are never followed or copied (as robocopy /XJ)
+        $target = Join-Path $Destination $e.Name
+        if ($e -is [System.IO.DirectoryInfo]) {
+            $r = Invoke-FVNative -FilePath $robo -ArgumentList @($e.FullName, $target, '/E', '/COPY:DAT', '/DCOPY:DAT', '/XJ', '/R:2', '/W:1', '/NP', '/NFL', '/NDL', '/NJH', '/NJS')
+            $codes.Add([int]$r.ExitCode)
+            if ($r.Text) { $texts.Add("$($e.Name): $($r.Text)") }
+            # robocopy: 0-7 mean success (files copied, extras found); 8 and above mean failure.
+            if (Test-FVRobocopyFailed -Result $r) { throw [System.IO.IOException]::new("Copy failed (robocopy $($r.ExitCode), $($e.Name)): " + $r.Text) }
+        } else {
+            Copy-FVFileWithTimes -File $e -Target $target
+        }
+    }
+    $max = 0
+    foreach ($c in $codes) { if ($c -gt $max) { $max = $c } }
+    return [pscustomobject]@{ ExitCode = $max; Text = ($texts -join ' | '); Runs = $codes.Count }
 }
 
 function Copy-FVTreeManaged {
@@ -694,7 +743,7 @@ function Clear-FVRecentItems {
 
 Export-ModuleMember -Function @(
     'Test-FVIsWindows', 'Test-FVReparsePath', 'Test-FVAncestorsClean', 'New-FVJunction', 'Get-FVLinkTarget', 'Remove-FVLink',
-    'Copy-FVTree', 'Copy-FVTreeManaged', 'Format-FVVerifyDetail', 'Write-FVCopyCheckLog', 'Get-FVFolderCheck', 'Test-FVCanRename',
+    'Copy-FVTree', 'Copy-FVTreeCore', 'Copy-FVTreeManaged', 'Test-FVRobocopyFailed', 'Format-FVVerifyDetail', 'Write-FVCopyCheckLog', 'Get-FVFolderCheck', 'Test-FVCanRename',
     'Invoke-FVProtectFolder', 'Invoke-FVUnprotectFolder', 'Get-FVUnfinishedState', 'Resolve-FVUnfinished', 'Clear-FVRecentItems',
     'Get-FVProp', 'Close-FVExplorerWindows', 'Invoke-FVLockVault', 'Invoke-FVLockAll', 'ConvertTo-FVPlainLinkTarget'
 )

@@ -235,3 +235,12 @@ Describe 'A-35: no vault is attached with Mount-DiskImage' {
     }
 }
 
+Describe 'A-37: robocopy is only ever given folders below a vault''s top' {
+    It 'no robocopy argument list in the window''s code names the copy''s own Source or Destination' {
+        $text = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot '..\..\src\FolderVault.UserOps.psm1'))
+        $calls = [regex]::Matches($text, 'Invoke-FVNative -FilePath \$robo -ArgumentList @\(([^)]*)\)')
+        $calls.Count | Should -BeGreaterThan 0
+        foreach ($c in $calls) { $c.Groups[1].Value | Should -Not -Match '\$(Source|Destination)\b' }
+    }
+}
+

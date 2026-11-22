@@ -75,6 +75,7 @@ Details: [ARCHITECTURE.md](ARCHITECTURE.md).
 | 22 Nov | 0.4.3 | Second protection attempt got past the permissions and the copy, then failed setting the vault root's attributes through its mount point, which Windows applies to the mount point folder (A-34). The window now leaves them to the service. |
 | 22 Nov | 0.4.4 | Third attempt still refused: vaults attached with Mount-DiskImage take the .vhdx file's SYSTEM-only permissions (A-35). Now attached with diskpart. Diagnostic `Test-FVVaultAccess.ps1` added. |
 | 22 Nov | 0.4.5 | Fourth attempt got past every permission, then the copy check failed, with no detail shown. The message now names what did not match and saves both lists for IT. The screen lock time is no longer set unless asked for, and the 10 minutes earlier installers set is removed on update and uninstall. |
+| 22 Nov | 0.4.6 | The new message showed the cause: robocopy was refused opening the vault's mount point folder (it sets the top folder's attributes and dates, which on a mount point land on a folder the person may only read) and still reported success. robocopy is now only given folders below the top; top-level files are copied directly; a refused folder counts as failure whatever the exit code (A-37). |
 
 ## 4. What has been verified, and how
 
@@ -97,7 +98,7 @@ Framework 4.8 reference assemblies; static rules for the Windows PowerShell
 5.1 faults found so far; planted-defect (mutation) checks on each fix.
 
 Unit tests: 282 (0.1.0) > 336 (0.2.1) > 364 (0.2.3) > 371 (0.2.4) >
-407 (0.2.5) > 445 (0.3.0) > 455 (0.4.0) > 459 (0.4.1) > 464 (0.4.2) > 468 (0.4.3) > 479 (0.4.4) > 488 (0.4.5), plus 1 that runs only on Windows.
+407 (0.2.5) > 445 (0.3.0) > 455 (0.4.0) > 459 (0.4.1) > 464 (0.4.2) > 468 (0.4.3) > 479 (0.4.4) > 488 (0.4.5) > 495 (0.4.6), plus 1 that runs only on Windows.
 
 ## 5. Security work
 

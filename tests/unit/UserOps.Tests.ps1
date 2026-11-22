@@ -539,3 +539,64 @@ Describe '0.4.5: a failed copy check says what was wrong' {
     }
 }
 
+Describe 'A-37: robocopy is never given a mount point' {
+    BeforeEach {
+        $script:cpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('fvcopy-' + [guid]::NewGuid().ToString('N'))
+        $script:cpSrc = Join-Path $cpRoot 'src'; $script:cpDst = Join-Path $cpRoot 'mount'
+        [void][System.IO.Directory]::CreateDirectory((Join-Path $cpSrc 'Sub\Deeper'))
+        [void][System.IO.Directory]::CreateDirectory($cpDst)
+        [System.IO.File]::WriteAllText((Join-Path $cpSrc 'a.ps1'), 'one')
+        [System.IO.File]::WriteAllText((Join-Path $cpSrc 'b.ps1'), 'two two')
+        [System.IO.File]::WriteAllText((Join-Path $cpSrc 'Sub\Deeper\c.txt'), 'three')
+        [System.IO.File]::SetLastWriteTimeUtc((Join-Path $cpSrc 'a.ps1'), [datetime]'2020-01-02T03:04:05Z')
+        $script:oldRoot = $env:SystemRoot; $env:SystemRoot = $script:cpRoot
+        $global:FVRoboCalls = New-Object System.Collections.Generic.List[object]
+        Mock -ModuleName FolderVault.UserOps Test-FVIsWindows { $true }
+        Mock -ModuleName FolderVault.UserOps Invoke-FVNative {
+            $global:FVRoboCalls.Add($ArgumentList)
+            Copy-FVTreeManaged -Source $ArgumentList[0] -Destination $ArgumentList[1]
+            [pscustomobject]@{ ExitCode = 1; Output = @(); Text = '' }
+        }
+    }
+    AfterEach { $env:SystemRoot = $script:oldRoot; Remove-Item -Recurse -Force $script:cpRoot -ErrorAction SilentlyContinue }
+
+    It 'copies top-level files itself and gives robocopy only the folders below' {
+        $r = Copy-FVTreeCore -Source $cpSrc -Destination $cpDst
+        $global:FVRoboCalls.Count | Should -Be 1
+        $global:FVRoboCalls[0][0] | Should -Be (Join-Path $cpSrc 'Sub')
+        $global:FVRoboCalls[0][1] | Should -Be (Join-Path $cpDst 'Sub')
+        foreach ($c in $global:FVRoboCalls) { $c | Should -Not -Contain $cpDst; $c | Should -Not -Contain $cpSrc }
+        [System.IO.File]::ReadAllText((Join-Path $cpDst 'b.ps1')) | Should -Be 'two two'
+        [System.IO.File]::ReadAllText((Join-Path $cpDst 'Sub\Deeper\c.txt')) | Should -Be 'three'
+        [System.IO.File]::GetLastWriteTimeUtc((Join-Path $cpDst 'a.ps1')) | Should -Be ([datetime]'2020-01-02T03:04:05Z').ToUniversalTime()
+        $r.ExitCode | Should -Be 1
+        $cmp = Compare-FVManifest -Source (Get-FVTreeManifest -Path $cpSrc) -Destination (Get-FVTreeManifest -Path $cpDst)
+        $cmp.Ok | Should -BeTrue
+    }
+    It 'leaves out the volume''s own folders when copying back' {
+        [void][System.IO.Directory]::CreateDirectory((Join-Path $cpSrc 'System Volume Information'))
+        $null = Copy-FVTreeCore -Source $cpSrc -Destination $cpDst -ExcludeTopLevel @('System Volume Information')
+        Test-Path (Join-Path $cpDst 'System Volume Information') | Should -BeFalse
+        $global:FVRoboCalls.Count | Should -Be 1
+    }
+    It 'stops when robocopy says it could not open a folder, even with exit code 0' {
+        Mock -ModuleName FolderVault.UserOps Invoke-FVNative {
+            [pscustomobject]@{ ExitCode = 0; Output = @('2026/11/22 20:31:28 ERROR 5 (0x00000005) Accessing Destination Directory C:\M\Sub\', 'Access is denied.'); Text = 'ERROR 5 ... Access is denied.' }
+        }
+        { Copy-FVTreeCore -Source $cpSrc -Destination $cpDst } | Should -Throw '*robocopy 0, Sub*'
+    }
+}
+
+Describe 'A-37: reading robocopy''s answer' {
+    It 'counts exit codes of 8 and above as failure' {
+        Test-FVRobocopyFailed -Result ([pscustomobject]@{ ExitCode = 8; Output = @() }) | Should -BeTrue
+        Test-FVRobocopyFailed -Result ([pscustomobject]@{ ExitCode = 3; Output = @() }) | Should -BeFalse
+    }
+    It 'counts a folder it could not open as failure' {
+        Test-FVRobocopyFailed -Result ([pscustomobject]@{ ExitCode = 0; Output = @('2026/11/22 20:31:28 ERROR 5 (0x00000005) Accessing Source Directory C:\x\') }) | Should -BeTrue
+    }
+    It 'does not count a file retried and then copied as failure' {
+        Test-FVRobocopyFailed -Result ([pscustomobject]@{ ExitCode = 1; Output = @('2026/11/22 20:31:28 ERROR 32 (0x00000020) Copying File C:\x\a.txt', 'Waiting 1 seconds... Retrying...') }) | Should -BeFalse
+    }
+}
+
