@@ -40,7 +40,8 @@ BeforeAll {
         Mock -ModuleName FolderVault.Engine Start-FVBdeEncryption { $script:calls.Add('encrypt') }
         Mock -ModuleName FolderVault.Engine New-FVPrivateDirectory { $script:calls.Add("mkdir:$Sddl") }
         Mock -ModuleName FolderVault.Engine Invoke-FVMountvol { $script:calls.Add("mountvol:$MountPath") }
-        Mock -ModuleName FolderVault.Engine Set-FVSecurity { $script:calls.Add("acl:$Sddl") }
+        Mock -ModuleName FolderVault.Engine Set-FVSecurity { $script:calls.Add("mountacl:${Path}:${Sddl}") }
+        Mock -ModuleName FolderVault.Engine Set-FVVolumeRootSecurity { $script:calls.Add("acl:$Sddl"); $script:calls.Add("aclpath:$VolumePath") }
         Mock -ModuleName FolderVault.Engine Set-FVNotIndexed { $script:calls.Add('noindex') }
         Mock -ModuleName FolderVault.Engine Remove-FolderVaultArtifacts { $script:calls.Add('rollback') }
     }
@@ -89,7 +90,7 @@ Describe 'Creating a container' {
         $calls | Should -Not -Contain 'diskpart'
     }
     It 'rolls back when <Step> fails' -ForEach @(
-        @{ Step = 'Protect-FVRecoveryKey' }, @{ Step = 'Start-FVBdeEncryption' }, @{ Step = 'Invoke-FVMountvol' }, @{ Step = 'Initialize-FolderVaultDisk' }, @{ Step = 'Set-FVSecurity' }
+        @{ Step = 'Protect-FVRecoveryKey' }, @{ Step = 'Start-FVBdeEncryption' }, @{ Step = 'Invoke-FVMountvol' }, @{ Step = 'Initialize-FolderVaultDisk' }, @{ Step = 'Set-FVVolumeRootSecurity' }
     ) {
         Mock -ModuleName FolderVault.Engine $Step { throw 'boom' }
         $r = New-FolderVaultContainer -Record (New-Rec) -Password 'pw' -Config $cfg -Paths $paths -ComputerName 'PC1'
@@ -378,3 +379,37 @@ Describe '0.2: cheaper session check' {
         (ConvertTo-FVSessionStates -Explorers @() -LockedSessionIds @(1) -ResolveSid $resolve).Count | Should -Be 0
     }
 }
+
+Describe 'Audit fix A-33: the vault root''s permissions are set on the volume, not the mount point folder' {
+    BeforeEach { Set-HappyMocks }
+    It 'sets them through \\?\Volume{GUID}\ after mounting, and never through Mounts\{id}' {
+        $rec = New-Rec
+        [void](New-FolderVaultContainer -Record $rec -Password 'pw' -Config $cfg -Paths $paths -ComputerName 'PC1')
+        @($calls | Where-Object { $_ -like 'aclpath:*' }) | Should -Be @('aclpath:\\?\Volume{aaaa}\')
+        @($calls | Where-Object { $_ -like 'mountacl:*' }) | Should -BeNullOrEmpty -Because 'Windows applies a mount point folder''s permissions to the folder, not the volume (KB 237701)'
+        $order = @($calls)
+        $iAcl = [array]::FindIndex([string[]]$order, [Predicate[string]] { param($x) $x -like 'acl:*' })
+        $iMount = [array]::FindIndex([string[]]$order, [Predicate[string]] { param($x) $x -like 'mountvol:*' })
+        $iAcl | Should -BeGreaterThan $iMount -Because 'the volume must be mounted (and unlocked) first'
+    }
+    It 'fails the creation (and rolls back) when the permissions cannot be confirmed' {
+        Mock -ModuleName FolderVault.Engine Set-FVVolumeRootSecurity { throw "The vault's root permissions did not apply" }
+        $r = New-FolderVaultContainer -Record (New-Rec) -Password 'pw' -Config $cfg -Paths $paths -ComputerName 'PC1'
+        $r.Ok | Should -BeFalse
+        $r.Stage | Should -Be 'RootAcl'
+        $calls | Should -Contain 'rollback'
+    }
+    It 'compares descriptors by their access entries, and insists on a protected list' {
+        $want = 'O:BAG:SYD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;S-1-5-21-1-2-3-1001)'
+        Test-FVSddlMatches -Actual 'O:BAG:SYD:PAI(A;OICI;FA;;;BA)(A;OICI;FA;;;S-1-5-21-1-2-3-1001)(A;OICI;FA;;;SY)' -Expected $want | Should -BeTrue
+        Test-FVSddlMatches -Actual 'O:BAG:SYD:AI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;S-1-5-21-1-2-3-1001)' -Expected $want | Should -BeFalse -Because 'not protected'
+        Test-FVSddlMatches -Actual ($want + '(A;OICI;0x1200a9;;;BU)') -Expected $want | Should -BeFalse -Because 'Users can read (the Format default)'
+        Test-FVSddlMatches -Actual 'O:BAG:SYD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)' -Expected $want | Should -BeFalse -Because 'the owner is missing'
+    }
+    It 'has a native helper that compiles' {
+        $src = & (Get-Module FolderVault.Engine) { $script:FVVolumeAclSource }
+        Add-Type -TypeDefinition $src.Replace('namespace FolderVault', 'namespace FolderVaultCompileTest')
+        @([FolderVaultCompileTest.VolumeAcl].GetMethods() | Where-Object IsStatic | ForEach-Object Name) | Should -Contain 'Set'
+    }
+}
+

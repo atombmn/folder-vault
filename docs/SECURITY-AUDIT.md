@@ -4,7 +4,8 @@ Audit of the prototype source code.
 Version 0.1 audited 29 October 2026; 0.2 changes reviewed 12 November 2026 (section 6);
 pre-deployment readiness audit of 0.2.4 on 13 November 2026 (section 7);
 review of the 0.3.0 "protect any folder" change on 20 November 2026 (section 8);
-publication review of 0.4.0 on 21 November 2026 (section 9).
+publication review of 0.4.0 on 21 November 2026 (section 9);
+first protection attempt on Windows, 22 November 2026 (section 10).
 
 > **In plain words.** We read every line of Folder Vault looking for ways it could
 > be broken into or could lose files, and ran hundreds of automated tests.
@@ -275,4 +276,18 @@ matter for security:
 
 No new findings. The verdict in section 7 stands: not for real data until
 the Windows test programme and the live exercise have passed.
+
+## 10. First protection attempt on Windows (22 November 2026)
+
+The first attempt to protect a folder on a real PC (Windows 11, 0.4.0, a
+folder outside the user folder) failed safely: the copy could not be
+checked, so nothing was changed, and the vault was removed.
+
+| ID | Sev. | Finding | Resolution |
+|---|---|---|---|
+| A-33 | High | The vault root's permissions were applied through its mount point folder (`Mounts\{id}`). Windows applies such permissions to the mount point folder, not to the mounted volume's root (Microsoft KB 237701, 832234), so the root kept its format-time permissions and its owner was refused. It failed closed (nothing was changed, no one else could read the vault) but no folder could be protected. The unit tests did not catch it because they replaced the permission step with a stand-in. | Permissions are set with `SetFileSecurity` on the volume's own path (`\\?\Volume{GUID}\`), read back, and compared entry by entry with what was asked for; any difference stops the creation and rolls it back. Windows test W26 now checks the root's permissions. |
+
+**Lesson.** Behaviour that depends on how Windows treats a mount point cannot
+be shown by a stand-in in a unit test. The Windows test programme (W10, W26)
+would have found this on a test computer; it is still required before real use.
 

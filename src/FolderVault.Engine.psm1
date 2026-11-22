@@ -257,6 +257,107 @@ function Set-FVSecurity {
     $di.SetAccessControl($ds)
 }
 
+# The root folder of a mounted volume cannot be given permissions through its
+# mount point folder: Windows applies them to the mount point folder itself and
+# leaves the volume's own root as Format made it (Microsoft KB 237701 and
+# 832234). The vault's root is therefore set through the volume's own path
+# (\\?\Volume{GUID}\), with SetFileSecurity, and read back to check (A-33).
+$script:FVVolumeAclSource = @"
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+namespace FolderVault {
+  public static class VolumeAcl {
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool ConvertStringSecurityDescriptorToSecurityDescriptorW(string sddl, uint revision, out IntPtr sd, out uint size);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool ConvertSecurityDescriptorToStringSecurityDescriptorW(IntPtr sd, uint revision, uint info, out IntPtr sddl, out uint length);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool SetFileSecurityW(string fileName, uint info, IntPtr sd);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool GetFileSecurityW(string fileName, uint info, IntPtr sd, uint length, out uint needed);
+    [DllImport("kernel32.dll")]
+    static extern IntPtr LocalFree(IntPtr p);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern uint GetFileAttributesW(string fileName);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool SetFileAttributesW(string fileName, uint attributes);
+    // Adds attribute bits (for example FILE_ATTRIBUTE_NOT_CONTENT_INDEXED, 0x2000) to a file or folder.
+    public static void AddAttributes(string path, uint add) {
+      uint a = GetFileAttributesW(path);
+      if (a == 0xFFFFFFFF) { throw new Win32Exception(Marshal.GetLastWin32Error()); }
+      if (!SetFileAttributesW(path, a | add)) { throw new Win32Exception(Marshal.GetLastWin32Error()); }
+    }
+    // OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION
+    const uint Info = 0x7;
+    public static void Set(string path, string sddl) {
+      IntPtr sd; uint size;
+      if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, out sd, out size)) { throw new Win32Exception(Marshal.GetLastWin32Error()); }
+      try {
+        if (!SetFileSecurityW(path, Info, sd)) { throw new Win32Exception(Marshal.GetLastWin32Error()); }
+      } finally { LocalFree(sd); }
+    }
+    public static string Get(string path) {
+      uint needed;
+      GetFileSecurityW(path, Info, IntPtr.Zero, 0, out needed);
+      if (needed == 0) { throw new Win32Exception(Marshal.GetLastWin32Error()); }
+      IntPtr buf = Marshal.AllocHGlobal((int)needed);
+      try {
+        if (!GetFileSecurityW(path, Info, buf, needed, out needed)) { throw new Win32Exception(Marshal.GetLastWin32Error()); }
+        IntPtr text; uint length;
+        if (!ConvertSecurityDescriptorToStringSecurityDescriptorW(buf, 1, Info, out text, out length)) { throw new Win32Exception(Marshal.GetLastWin32Error()); }
+        try { return Marshal.PtrToStringUni(text); } finally { LocalFree(text); }
+      } finally { Marshal.FreeHGlobal(buf); }
+    }
+  }
+}
+"@
+
+function Get-FVAceSet {
+    <# The access entries of an SDDL string, upper case, sorted and without repeats, for comparing two descriptors. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Sddl)
+    $d = $Sddl.IndexOf('D:')
+    if ($d -lt 0) { return @() }
+    $dacl = $Sddl.Substring($d)
+    $s = $dacl.IndexOf('S:')
+    if ($s -gt 0) { $dacl = $dacl.Substring(0, $s) }
+    return @([regex]::Matches($dacl, '\([^)]*\)') | ForEach-Object { $_.Value.ToUpperInvariant() } | Sort-Object -Unique)
+}
+
+function Test-FVSddlMatches {
+    <# True when $Actual has a protected DACL with exactly the access entries of $Expected. #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param([Parameter(Mandatory)][string]$Actual, [Parameter(Mandatory)][string]$Expected)
+    if ($Actual -notmatch 'D:P') { return $false }
+    $a = @(Get-FVAceSet -Sddl $Actual); $e = @(Get-FVAceSet -Sddl $Expected)
+    if ($a.Count -ne $e.Count) { return $false }
+    for ($i = 0; $i -lt $a.Count; $i++) { if ($a[$i] -ne $e[$i]) { return $false } }
+    return $true
+}
+
+function Set-FVVolumeRootSecurity {
+    <#
+        Sets the permissions of a volume's root folder through the volume's own
+        path (\\?\Volume{GUID}\), then reads them back and throws if they are
+        not exactly what was asked for.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory)][string]$VolumePath, [Parameter(Mandatory)][string]$Sddl)
+    if (-not $PSCmdlet.ShouldProcess($VolumePath, 'Set root ACL')) { return }
+    if (-not ('FolderVault.VolumeAcl' -as [type])) { Add-Type -TypeDefinition $script:FVVolumeAclSource -ErrorAction Stop }
+    $root = $VolumePath.TrimEnd('\') + '\'
+    $t = 'FolderVault.VolumeAcl' -as [type]
+    $t::Set($root, $Sddl)
+    $got = $t::Get($root)
+    if (-not (Test-FVSddlMatches -Actual $got -Expected $Sddl)) {
+        throw [System.InvalidOperationException]::new("The vault's root permissions did not apply (wanted $Sddl, found $got)")
+    }
+    # Keep Windows Search out of the vault, on the root itself (0x2000 = NOT_CONTENT_INDEXED).
+    $t::AddAttributes($root, [uint32]8192)
+}
+
 function Set-FVNotIndexed {
     <# Asks Windows Search not to index the vault contents. #>
     [CmdletBinding(SupportsShouldProcess)]
@@ -519,8 +620,8 @@ function New-FolderVaultContainer {
         $stage = 'RootAcl'
         if ($Record.Scope -eq 'Shared') { $rootSddl = $script:SddlVolumeRootShared }
         else { $rootSddl = $script:SddlVolumeRootProfileFmt -f $Record.OwnerSid }
-        Set-FVSecurity -Path $f.Mount -Sddl $rootSddl
-        Set-FVNotIndexed -Path $f.Mount
+        # Through the volume's own path, never the mount point folder (A-33).
+        Set-FVVolumeRootSecurity -VolumePath $vol -Sddl $rootSddl
 
         return (New-FVEngineResult -Ok $true -Code 'Ok' -Stage 'Done' -Data ([pscustomobject]@{ MountPath = $f.Mount }))
     } catch {
@@ -837,7 +938,7 @@ function Get-FVSessionStates {
 Export-ModuleMember -Function @(
     'Get-FolderVaultFiles', 'Invoke-FVDiskpartCreate', 'Mount-FVVhd', 'Assert-FolderVaultDisk', 'Test-FVDiskIsBlank', 'Remove-FVDriveLetters', 'Dismount-FVVhd', 'Test-FVVhdAttached',
     'Initialize-FolderVaultDisk', 'Get-FVVolumePath', 'Get-FVBdeVolume', 'Invoke-FVBde', 'Invoke-FVMountvol', 'Test-FVMounted',
-    'Set-FVSecurity', 'Set-FVNotIndexed', 'New-FVPrivateDirectory', 'Test-FVEscrowCertificate', 'Protect-FVRecoveryKey',
+    'Set-FVSecurity', 'Set-FVVolumeRootSecurity', 'Test-FVSddlMatches', 'Get-FVAceSet', 'Set-FVNotIndexed', 'New-FVPrivateDirectory', 'Test-FVEscrowCertificate', 'Protect-FVRecoveryKey',
     'Get-FVLockStatus', 'Unlock-FVBdeWithPassword', 'Unlock-FVBdeWithRecovery', 'Lock-FVBde',
     'Get-FVProtectorIds', 'Add-FVPassphraseProtector', 'Add-FVRecoveryProtector', 'Remove-FVProtector', 'Start-FVBdeEncryption',
     'New-FolderVaultContainer', 'Remove-FolderVaultArtifacts', 'Get-FolderVaultRuntime', 'Open-FolderVaultContainer', 'Close-FolderVaultContainer',

@@ -3,6 +3,29 @@
 All notable changes. Versions before 0.4.0 were developed under an internal
 working name; they are listed here under the name Folder Vault.
 
+## 0.4.1 (22 November 2026)
+
+First fault found when protecting a folder on a real Windows PC.
+
+### Fixes
+- **Protecting a folder failed** with "The copy could not be verified ...
+  Access to the path 'C:\ProgramData\FolderVault\Mounts\{id}' is denied".
+  The vault's permissions were set through its mount point folder, and
+  Windows applies permissions set that way to the mount point folder itself,
+  not to the root of the mounted volume (Microsoft KB 237701 and 832234). The
+  vault's root kept the permissions it was formatted with, which did not let
+  its owner in. The background service now sets the root's permissions
+  through the volume's own path (`\\?\Volume{GUID}\`), reads them back, and
+  stops with a clear error if they are not exactly right (A-33). The "do not
+  index" mark is set on the root the same way.
+
+### Added
+- Unit tests for the new permission step (it runs after mounting, on the
+  volume path, and a failure rolls everything back), for comparing security
+  descriptors, and that the native helper compiles.
+- Windows test W26 now reads the vault root's permissions and checks that
+  they let in its owner and nobody else.
+
 ## 0.4.0 (21 November 2026)
 
 **First public release as Folder Vault.** No change to how folders are

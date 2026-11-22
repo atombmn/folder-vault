@@ -70,6 +70,7 @@ Details: [ARCHITECTURE.md](ARCHITECTURE.md).
 | 13 Nov | 0.2.5 | **Pre-deployment readiness audit** (purple team readiness review, not a live exercise). 11 findings fixed (A-20 to A-30), including a critical one: the disk safety check used a property Windows leaves empty for virtual disks, so every protection would have failed. Installer now checks its own files and shows fingerprints. **Installed on the first test PC: all checks passed, 99 MB, 0.00 % CPU idle.** |
 | 20 Nov | 0.3.0 | Protect **any of your own folders**: OneDrive folders (refused before, as seen on the first test PC) and folders on the PC's other drives. Client install kit. `C:\FVInstall` steps in the setup guide. Review findings A-31 and A-32 fixed before release. |
 | 21 Nov | 0.4.0 | **Published as Folder Vault.** Renamed throughout; personal and organisation details removed; regional weak-password words moved into a setting (`LocalWeakWords`); specification written; GitHub files added (licence, security policy, automatic tests); publication audit (PUBLICATION-AUDIT.md). |
+| 22 Nov | 0.4.1 | **First protection attempt on Windows** failed safely: the vault's root permissions had been set through its mount point folder, which Windows applies to that folder instead (A-33). Fixed by setting them on the volume itself and checking them. |
 
 ## 4. What has been verified, and how
 
@@ -92,7 +93,7 @@ Framework 4.8 reference assemblies; static rules for the Windows PowerShell
 5.1 faults found so far; planted-defect (mutation) checks on each fix.
 
 Unit tests: 282 (0.1.0) > 336 (0.2.1) > 364 (0.2.3) > 371 (0.2.4) >
-407 (0.2.5) > 445 (0.3.0) > 455 (0.4.0), plus 1 that runs only on Windows.
+407 (0.2.5) > 445 (0.3.0) > 455 (0.4.0) > 459 (0.4.1), plus 1 that runs only on Windows.
 
 ## 5. Security work
 

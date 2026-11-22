@@ -45,6 +45,7 @@ Start-Transcript -Path (Join-Path $Work 'transcript.txt') | Out-Null
 Import-Module (Join-Path $InstallDir 'FolderVault.Common.psm1') -Force
 Import-Module (Join-Path $InstallDir 'FolderVault.Client.psm1') -Force
 Import-Module (Join-Path $InstallDir 'FolderVault.UserOps.psm1') -Force
+Import-Module (Join-Path $InstallDir 'FolderVault.Engine.psm1') -Force   # only to read a vault root's permissions (W26)
 $broker = { param([hashtable]$r) Invoke-FVBroker -Request $r -ResponseTimeoutMs 900000 }
 
 # ------------------------------------------------------------------ harness
@@ -267,7 +268,7 @@ Test-Case 'W21' 'Correct password unlocks; every file is byte-identical' {
     Assert-True $cmp.Ok ("missing: " + ($cmp.Missing -join ',') + " mismatched: " + ($cmp.Mismatched -join ','))
     "$($before.Count) entries verified"   # count-safe: manifest is a Dictionary
 }
-Test-Case 'W26' 'Unlocked vault has no drive letter and is our own virtual disk (A-20, A-23)' {
+Test-Case 'W26' 'Unlocked vault has no drive letter, is our own virtual disk, and its root lets in only its owner (A-20, A-23, A-33)' {
     $img = Get-DiskImage -ImagePath (Join-Path $DataDir "Vaults\$vaultA.vhdx")
     Assert-True ($img.Attached -and $null -ne $img.Number) 'container not attached while unlocked'
     $disk = Get-Disk -Number $img.Number
@@ -277,6 +278,14 @@ Test-Case 'W26' 'Unlocked vault has no drive letter and is our own virtual disk 
     $parts = @(Get-Partition -DiskNumber $img.Number | Where-Object { $_.Type -eq 'Basic' })
     Assert-True ($parts.Count -eq 1) "basic partitions: $($parts.Count)"
     Assert-True ([bool]$parts[0].NoDefaultDriveLetter) 'NoDefaultDriveLetter is off'
+    # A-33: the volume's own root grants the owner, not just the mount point folder.
+    $volPath = @($parts[0].AccessPaths | Where-Object { $_ -like '\\?\Volume*' })[0]
+    if (-not ('FolderVault.VolumeAcl' -as [type])) { Add-Type -TypeDefinition (& (Get-Module FolderVault.Engine) { $script:FVVolumeAclSource }) }
+    $rootSddl = ('FolderVault.VolumeAcl' -as [type])::Get($volPath)
+    $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    Assert-True ($rootSddl -match [regex]::Escape(";;;$me)")) "vault root does not grant its owner: $rootSddl"
+    Assert-True ($rootSddl -notmatch ';;;(BU|AU|WD)\)') "vault root grants other people: $rootSddl"
+    @(Get-ChildItem -LiteralPath (Join-Path $DataDir "Mounts\$vaultA") -Force -ErrorAction Stop) | Out-Null
     "disk $($img.Number), no letter"
 }
 Test-Case 'W22' 'Vault volume: XTS-AES-256, passphrase + recovery protectors only, no auto-unlock' {
